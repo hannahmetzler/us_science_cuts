@@ -1,0 +1,47 @@
+---
+title: "Read csvs"
+format: html
+editor: source
+---
+
+```{r}
+# Packages
+library(tidyverse)
+```
+
+
+## Read in raw data files Terminated Grants
+
+```{r}
+# SOURCE: Grant Witness
+# nih: cut columns ...59 to ...59
+nih = readr::read_csv('../data/grant_witness_nih_terminations.csv')
+epa = readr::read_csv('../data/grant_witness_epa_terminations.csv')
+# NSF: cut columns ...40 to ...52 (n=1985 rows)
+nsf = readr::read_csv('../data/grant_witness_nsf_terminations.csv')
+
+# SOURCE: COOSA: https://cossa.org/nsf-releases-list-of-terminated-grants/
+# delete column ..6
+# to do: match award ID to nsf data by grant witness, that is most likely more comprehensive (n=1667 rows)
+nsf2 = readr::read_csv('../data/NSF-Terminated-Awards.csv')
+
+glimpse(nih)
+glimpse(epa)
+glimpse(nsf)
+glimpse(nsf2)
+
+```
+
+
+## Read in raw data files ALL GRANTS
+```{r}
+
+```
+
+
+## 
+
+```{r}
+
+```
+
