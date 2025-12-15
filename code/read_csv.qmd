@@ -35,7 +35,15 @@ glimpse(nsf2)
 
 ## Read in raw data files ALL GRANTS
 ```{r}
-
+# skip first 5 lines for nih reporter data files (info in header), delete column ...5
+nih_all_2025 = readr::read_csv('../data/nih_reporter_all_grants_2025_USA.csv', skip = 5)
+nih_all_2024 = readr::read_csv('../data/nih_reporter_all_grants_2024_USA.csv', skip = 5)
+nih_all_2023 = readr::read_csv('../data/nih_reporter_all_grants_2023_USA.csv', skip = 5)
+nih_all_2022 = readr::read_csv('../data/nih_reporter_all_grants_2022_USA.csv', skip = 5)
+nih_all_2021 = readr::read_csv('../data/nih_reporter_all_grants_2021_USA.csv', skip = 5)
+glimpse(nih_all_2025)
+dim(nih_all_2025) # has 15389 lines, so some grants might have been cut, max 15000
+tail(nih_all_2025)["Contact PI / Project Leader"]
 ```
 
 
