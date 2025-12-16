@@ -1,5 +1,5 @@
 # raw data directory
-./data_raw/
+data_raw/
 
 # History files
 .Rhistory
