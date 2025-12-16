@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # Folder containing JSON files
-JSON_DIR="../data_raw/NSF_all_grants"   # adjust if needed
-OUTPUT="NSF_all_grants.tsv"
+JSON_DIR="../data_raw/NSF_all_grants/"   # adjust if needed
+OUTPUT="NSF_all_grants_2019-2014.tsv"
 
 # Remove old output file
 rm -f "$OUTPUT"

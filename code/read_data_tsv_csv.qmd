@@ -10,54 +10,150 @@ library(tidyverse)
 ```
 
 
-## Read in raw data files Terminated Grants
+## Read in and join NSF Data
 
 ```{r}
-# SOURCE: Grant Witness
-# nih: cut columns ...59 to ...59
-nih = readr::read_csv('../data/grant_witness_nih_terminations.csv')
-epa = readr::read_csv('../data/grant_witness_epa_terminations.csv')
-# NSF: cut columns ...40 to ...52 (n=1985 rows)
-nsf = readr::read_csv('../data/grant_witness_nsf_terminations.csv')
+# NSF all grants 2020-2025, exported from website via json files: https://www.nsf.gov/awardsearch/download-awards
+# Define a column specification: force awd_id to character
+col_spec <- cols(
+  awd_id = col_character(),
+  .default = col_guess()  # everything else guessed automatically
+)
+
+# Read both files with the same column specification
+nsf_2014_2019 <- read_tsv('../data/NSF_all_grants_2019-2014.tsv', col_types = col_spec)
+nsf_2020_2026 <- read_tsv('../data/NSF_all_grants_2026-2020.tsv', col_types = col_spec)
+
+# Combine
+nsf_all <- bind_rows(nsf_2014_2019, nsf_2020_2026)
+
+# select required columns from nsf_all
+nsf_all = nsf_all %>% 
+  select(c(awd_id, agcy_id, pi_names, awd_titl_txt, awd_eff_date, awd_exp_date, tot_intn_awd_amt, awd_amount, pi_names, pi_emails, inst_name, inst_state, fund_oblg_amt, awd_abstract_narration))
+
+# NSF cut grants: cut columns ...40 to ...52 (n=1985 rows)
+nsf_cut = readr::read_csv('../data_raw/grant_witness_nsf_terminations.csv')
+# delete columns without names and mostly NA cells (...40 to ...52)
+nsf_cut <- nsf_cut %>%
+  select(-starts_with("...")) %>% 
+  # grant_id is an identifier, not numeric
+  mutate(grant_id = as.character(grant_id))
 
 # SOURCE: COOSA: https://cossa.org/nsf-releases-list-of-terminated-grants/
-# delete column ..6
-# to do: match award ID to nsf data by grant witness, that is most likely more comprehensive (n=1667 rows)
-nsf2 = readr::read_csv('../data/NSF-Terminated-Awards.csv')
+# to do: match award ID to NSF data_raw by grant witness, that is most likely more comprehensive (n=1667 rows)
+nsf_cut2 = readr::read_csv('../data_raw/NSF-Terminated-Awards.csv')
+# delete columns without names and mostly NA cells (...6)
+nsf_cut2 <- nsf_cut2 %>%
+  select(-starts_with("..."))
 
-glimpse(nih)
-glimpse(epa)
-glimpse(nsf)
-glimpse(nsf2)
+# which grants in nsf_cut2 are not included in nsf_cut? None are not included. We can safely ignore data from the coosa website.  
+nsf_cut2_missing <- nsf_cut2 %>%
+  anti_join(nsf_cut, by = c("Award ID" = "grant_id"))
+
+### join missing grant data with all grant data #
+
+#rename columns in nsf_all to those corresponding in nsf_cut, if confidence for the match is high
+nsf_all = nsf_all %>% 
+  # high confidence matches
+  rename(
+    grant_id      = awd_id,
+    project_title = awd_titl_txt,
+    nsf_start_date = awd_eff_date,
+    nsf_end_date   = awd_exp_date,
+    org_name      = inst_name,
+    org_state     = inst_state, 
+    nsf_total_budget      = tot_intn_awd_amt,
+    # nsf_obligated         = awd_amount, #medium confidence, check after joining if these 2 columns actually match
+    usasp_total_obligated = fund_oblg_amt
+  )
+
+# now join the 2 data frames, keeping all lines in nsf_all
+nsf_all_joined <- nsf_all %>%
+  left_join(nsf_cut, by = "grant_id"
+  ) %>% 
+  # create binary cut indicator
+  mutate(was_cut = if_else(!is.na(status), 1, 0))
+
+# delete the double columns in nsf_all_joined that existed in both dataframes
+nsf_all_joined <- nsf_all_joined %>%
+  # Example: keep left table versions for these columns
+  select(-c(project_title.y, nsf_start_date.y, nsf_end_date.y, org_name.y, org_state.y, nsf_total_budget.y)) %>%
+  rename(
+    project_title = project_title.x,
+    nsf_start_date = nsf_start_date.x,
+    nsf_end_date = nsf_end_date.x,
+    org_name = org_name.x,
+    org_state = org_state.x,
+    nsf_total_budget = nsf_total_budget.x
+  )
+
+
+```
+```{r, check which grants got lost from nsf_cut}
+# how many
+sum(!is.na(nsf_all_joined$status))
+nrow(nsf_cut)
+
+# which grants got lost in the join, because they are not in nsf_all?
+nsf_cut_lost <- nsf_cut %>%
+  anti_join(nsf_all, by = "grant_id")
+
+# when did these grants start according to NSF? Probably before 2020
+nsf_cut_lost$nsf_start_date
+# I downloaded grants from 2014 onward the nsf.gov page next, this reduced lost grants somewhat
+```
+
+
+```{r, check if the columns of medium confidence match: }
+# filter to cut grants only
+cut_grants <- nsf_all_joined %>%
+  filter(was_cut == 1) %>% 
+# compare awd_amount and nsf_obligated
+  mutate(amount_match = awd_amount == as.numeric(nsf_obligated),
+         amount_diff  = awd_amount - as.numeric(nsf_obligated)) %>% 
+  select(awd_amount, nsf_obligated, amount_diff, amount_match)
+
+# Quick summary
+summary(cut_grants$amount_diff)
+table(cut_grants$amount_match)
 
 ```
 
 
-## Read in raw data files ALL GRANTS NIH
-
-```{r}
-# skip first 5 lines for nih reporter data files (info in header), delete column ...5
-nih_all_2025 = readr::read_csv('../data/nih_reporter_all_grants_2025_USA.csv', skip = 5)
-nih_all_2024 = readr::read_csv('../data/nih_reporter_all_grants_2024_USA.csv', skip = 5)
-nih_all_2023 = readr::read_csv('../data/nih_reporter_all_grants_2023_USA.csv', skip = 5)
-nih_all_2022 = readr::read_csv('../data/nih_reporter_all_grants_2022_USA.csv', skip = 5)
-nih_all_2021 = readr::read_csv('../data/nih_reporter_all_grants_2021_USA.csv', skip = 5)
-glimpse(nih_all_2025)
-dim(nih_all_2025) # has 15389 lines, so some grants might have been cut, max 15000
-tail(nih_all_2025)["Contact PI / Project Leader"]
-```
-
-
-## Read in raw data files ALL GRANTS NSF
-
-```{r}
-nsf_all = readr::read_tsv('../data/NSF_all_grants.tsv')
-head(nsf_all)
-head(nsf_all$pi_emails)
+```{r, export NSF scientist emails}
 # Combine all into a single string, comma-separated
 all_emails <- paste(nsf_all$pi_emails, collapse = ", ")
 
 # Write to a text file
 writeLines(all_emails, "emails_for_email.txt")
 ```
+
+## Read in raw data_raw files Terminated Grants
+
+```{r}
+# SOURCE: Grant Witness
+# nih: cut columns ...59 to ...59
+nih = readr::read_csv('../data_raw/grant_witness_nih_terminations.csv')
+epa = readr::read_csv('../data_raw/grant_witness_epa_terminations.csv')
+
+
+```
+
+
+## Read in raw data_raw files ALL GRANTS NIH
+
+```{r}
+# skip first 5 lines for nih reporter data_raw files (info in header), delete column ...5
+nih_all_2025 = readr::read_csv('../data_raw/nih_reporter_all_grants_2025_USA.csv', skip = 5)
+nih_all_2024 = readr::read_csv('../data_raw/nih_reporter_all_grants_2024_USA.csv', skip = 5)
+nih_all_2023 = readr::read_csv('../data_raw/nih_reporter_all_grants_2023_USA.csv', skip = 5)
+nih_all_2022 = readr::read_csv('../data_raw/nih_reporter_all_grants_2022_USA.csv', skip = 5)
+nih_all_2021 = readr::read_csv('../data_raw/nih_reporter_all_grants_2021_USA.csv', skip = 5)
+glimpse(nih_all_2025)
+dim(nih_all_2025) # has 15389 lines, so some grants might have been cut, max 15000
+tail(nih_all_2025)["Contact PI / Project Leader"]
+```
+
+
+
 
