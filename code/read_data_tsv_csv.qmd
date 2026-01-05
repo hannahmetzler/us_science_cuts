@@ -7,6 +7,7 @@ editor: source
 ```{r}
 # Packages
 library(tidyverse)
+library(here)
 ```
 
 
@@ -21,8 +22,8 @@ col_spec <- cols(
 )
 
 # Read both files with the same column specification
-nsf_2014_2019 <- read_tsv('../data/NSF_all_grants_2019-2014.tsv', col_types = col_spec)
-nsf_2020_2026 <- read_tsv('../data/NSF_all_grants_2026-2020.tsv', col_types = col_spec)
+nsf_2014_2019 <- read_tsv(here('data/NSF_all_grants_2019-2014.tsv'), col_types = col_spec)
+nsf_2020_2026 <- read_tsv(here('data/NSF_all_grants_2026-2020.tsv'), col_types = col_spec)
 
 # Combine
 nsf_all <- bind_rows(nsf_2014_2019, nsf_2020_2026)
@@ -32,7 +33,7 @@ nsf_all = nsf_all %>%
   select(c(awd_id, agcy_id, pi_names, awd_titl_txt, awd_eff_date, awd_exp_date, tot_intn_awd_amt, awd_amount, pi_names, pi_emails, inst_name, inst_state, fund_oblg_amt, awd_abstract_narration))
 
 # NSF cut grants: cut columns ...40 to ...52 (n=1985 rows)
-nsf_cut = readr::read_csv('../data_raw/grant_witness_nsf_terminations.csv')
+nsf_cut = readr::read_csv(here('data_raw/grant_witness_nsf_terminations.csv'))
 # delete columns without names and mostly NA cells (...40 to ...52)
 nsf_cut <- nsf_cut %>%
   select(-starts_with("...")) %>% 
@@ -41,7 +42,7 @@ nsf_cut <- nsf_cut %>%
 
 # SOURCE: COOSA: https://cossa.org/nsf-releases-list-of-terminated-grants/
 # to do: match award ID to NSF data_raw by grant witness, that is most likely more comprehensive (n=1667 rows)
-nsf_cut2 = readr::read_csv('../data_raw/NSF-Terminated-Awards.csv')
+nsf_cut2 = readr::read_csv(here('data_raw/NSF-Terminated-Awards.csv'))
 # delete columns without names and mostly NA cells (...6)
 nsf_cut2 <- nsf_cut2 %>%
   select(-starts_with("..."))
@@ -120,12 +121,36 @@ table(cut_grants$amount_match)
 ```
 
 
-```{r, export NSF scientist emails}
-# Combine all into a single string, comma-separated
-all_emails <- paste(nsf_all$pi_emails, collapse = ", ")
+```{r, export NSF scientist emails for survey}
+# Split comma-separated emails into individual rows (PIs + Co-PIs)
+emails_expanded <- nsf_all_joined %>%
+  filter(!is.na(pi_emails) & pi_emails != "") %>%
+  select(grant_id, pi_emails, pi_names, org_name, org_state, was_cut) %>%
+  mutate(email = str_split(pi_emails, ",\\s*")) %>%
+  unnest(email) %>%
+  mutate(email = str_trim(email)) %>%
+  filter(email != "" & !is.na(email)) %>%
+  filter(str_detect(email, "@")) %>%
+  filter(!str_detect(email, "@SIDDUPLICATE\\.sid$"))
 
-# Write to a text file
-writeLines(all_emails, "emails_for_email.txt")
+# Deduplicate by email, sort by pi_names
+survey_emails <- emails_expanded %>%
+  group_by(email) %>%
+  summarise(
+    pi_names = first(pi_names),
+    institution = first(org_name),
+    state = first(org_state),
+    group = if_else(any(was_cut == 1), "cut", "control"),
+    n_grants = n_distinct(grant_id),
+    n_cut = sum(was_cut)
+  ) %>%
+  arrange(pi_names)
+
+write_csv(survey_emails, here('output/nsf_emails_survey.csv'))
+
+cat("Total unique emails:", nrow(survey_emails), "\n")
+cat("Cut group:", sum(survey_emails$group == "cut"), "\n")
+cat("Control group:", sum(survey_emails$group == "control"), "\n")
 ```
 
 ## Read in raw data_raw files Terminated Grants
@@ -133,8 +158,8 @@ writeLines(all_emails, "emails_for_email.txt")
 ```{r}
 # SOURCE: Grant Witness
 # nih: cut columns ...59 to ...59
-nih = readr::read_csv('../data_raw/grant_witness_nih_terminations.csv')
-epa = readr::read_csv('../data_raw/grant_witness_epa_terminations.csv')
+nih = readr::read_csv(here('data_raw/grant_witness_nih_terminations.csv'))
+epa = readr::read_csv(here('data_raw/grant_witness_epa_terminations.csv'))
 
 
 ```
@@ -144,11 +169,11 @@ epa = readr::read_csv('../data_raw/grant_witness_epa_terminations.csv')
 
 ```{r}
 # skip first 5 lines for nih reporter data_raw files (info in header), delete column ...5
-nih_all_2025 = readr::read_csv('../data_raw/nih_reporter_all_grants_2025_USA.csv', skip = 5)
-nih_all_2024 = readr::read_csv('../data_raw/nih_reporter_all_grants_2024_USA.csv', skip = 5)
-nih_all_2023 = readr::read_csv('../data_raw/nih_reporter_all_grants_2023_USA.csv', skip = 5)
-nih_all_2022 = readr::read_csv('../data_raw/nih_reporter_all_grants_2022_USA.csv', skip = 5)
-nih_all_2021 = readr::read_csv('../data_raw/nih_reporter_all_grants_2021_USA.csv', skip = 5)
+nih_all_2025 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2025_USA.csv'), skip = 5)
+nih_all_2024 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2024_USA.csv'), skip = 5)
+nih_all_2023 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2023_USA.csv'), skip = 5)
+nih_all_2022 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2022_USA.csv'), skip = 5)
+nih_all_2021 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2021_USA.csv'), skip = 5)
 glimpse(nih_all_2025)
 dim(nih_all_2025) # has 15389 lines, so some grants might have been cut, max 15000
 tail(nih_all_2025)["Contact PI / Project Leader"]

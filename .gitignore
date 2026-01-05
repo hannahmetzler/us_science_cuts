@@ -1,6 +1,8 @@
 # raw data directory
 data_raw/
 data/
+output/
+figures/
 
 # History files
 .Rhistory
