@@ -3,6 +3,8 @@ data_raw/
 data/
 output/
 figures/
+project_description/
+CLAUDE.md
 
 # History files
 .Rhistory
