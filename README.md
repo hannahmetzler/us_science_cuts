@@ -31,5 +31,5 @@ Main analysis script: `code/read_data_tsv_csv.qmd`
 
 ### Output files
 
-- `output/nsf_analysis.csv` - All NSF grants with termination status (cut grants first)
-- `output/nsf_unique_emails.csv` - Unique PI emails for survey (cut/control groups)
+- `output/nsf_analysis.csv` - All NSF grants with termination status (one row per grant, cut grants first)
+- `output/nsf_emails.csv` - Same data expanded to one row per email (for survey/analysis)

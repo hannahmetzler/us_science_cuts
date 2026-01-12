@@ -131,11 +131,10 @@ cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), 
 glimpse(nsf_analysis)
 ```
 
-```{r, create grant-PI level dataset}
-# Expand to one row per grant-email combination
-# Keeps all grant info, useful for filtering and analysis
+```{r, create email-level dataset}
+# Expand to one row per email, keeping all grant info
 # Note: pi_names kept as comma-separated (names/emails don't always match 1:1)
-nsf_grant_pi <- nsf_analysis %>%
+nsf_emails <- nsf_analysis %>%
   filter(!is.na(pi_emails) & pi_emails != "") %>%
   mutate(email = str_split(pi_emails, ",\\s*")) %>%
   unnest(email) %>%
@@ -146,32 +145,19 @@ nsf_grant_pi <- nsf_analysis %>%
   select(-pi_emails) %>%
   relocate(grant_id, pi_names, email) %>%
   arrange(desc(was_cut), grant_id, email)
-```
 
-```{r, get unique emails for survey}
-# Get unique email list (one row per person, keeps first grant info)
-unique_emails <- nsf_grant_pi %>%
-  group_by(email) %>%
-  summarise(
-    pi_names = first(pi_names),
-    org_name = first(org_name),
-    org_state = first(org_state),
-    n_grants = n(),
-    n_cut = sum(was_cut),
-    group = if_else(any(was_cut), "cut", "control")
-  ) %>%
-  arrange(desc(group == "cut"), pi_names)
+write_csv(nsf_emails, here('output/nsf_emails.csv'))
 
-write_csv(unique_emails, here('output/nsf_unique_emails.csv'))
+cat("Email dataset:", nrow(nsf_emails), "rows\n")
+cat("Unique grants:", n_distinct(nsf_emails$grant_id), "\n")
+cat("Unique emails:", n_distinct(nsf_emails$email), "\n")
+cat("Cut grant rows:", sum(nsf_emails$was_cut), "\n")
 
-cat("Unique emails:", nrow(unique_emails), "\n")
-cat("Cut group:", sum(unique_emails$group == "cut"), "\n")
-cat("Control group:", sum(unique_emails$group == "control"), "\n")
-
-# Example: filter to specific directorate before getting unique emails
-# unique_emails_sbe <- nsf_grant_pi %>%
-#   filter(directorate == "SBE") %>%
-#   distinct(email, .keep_all = TRUE)
+# To get unique email list for sending survey:
+# nsf_emails %>% distinct(email, .keep_all = TRUE)
+#
+# To filter by directorate first:
+# nsf_emails %>% filter(directorate == "SBE") %>% distinct(email, .keep_all = TRUE)
 ```
 
 ## Read in raw data_raw files Terminated Grants
