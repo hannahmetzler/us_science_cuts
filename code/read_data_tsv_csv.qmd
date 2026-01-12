@@ -179,8 +179,8 @@ cat("Control group:", sum(unique_emails$group == "control"), "\n")
 ```{r}
 # SOURCE: Grant Witness
 # nih: cut columns ...59 to ...59
-nih = readr::read_csv(here('data_raw/grant_witness_nih_terminations.csv'))
-epa = readr::read_csv(here('data_raw/grant_witness_epa_terminations.csv'))
+nih = readr::read_csv(here('data/grant_witness_nih_terminations.csv'))
+epa = readr::read_csv(here('data/grant_witness_epa_terminations.csv'))
 
 
 ```
