@@ -1,7 +1,7 @@
 # raw data directory
 data_raw/
 data/
-output/
+data_analysis/
 figures/
 project_description/
 CLAUDE.md
