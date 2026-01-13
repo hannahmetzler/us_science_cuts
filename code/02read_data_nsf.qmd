@@ -176,7 +176,7 @@ nsf_analysis <- nsf_joined %>%
   ) %>%
   arrange(desc(was_cut), grant_id)  # cut grants first
 
-write_csv(nsf_analysis, here('output/nsf_analysis.csv'))
+write_csv(nsf_analysis, here('data_analysis/nsf_analysis.csv'))
 cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
 glimpse(nsf_analysis)
 ```
@@ -191,7 +191,7 @@ nsf_emails <- nsf_analysis %>%
   filter(str_detect(pi_emails, "@")) %>%
   filter(!str_detect(pi_emails, "@SIDDUPLICATE\\.sid$"))
 
-write_csv(nsf_emails, here('output/nsf_emails.csv'))
+write_csv(nsf_emails, here('data_analysis/nsf_emails.csv'))
 
 cat("Email dataset:", nrow(nsf_emails), "rows\n")
 cat("Unique emails:", n_distinct(nsf_emails$pi_emails), "\n")
