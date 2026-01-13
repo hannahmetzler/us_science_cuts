@@ -132,32 +132,18 @@ glimpse(nsf_analysis)
 ```
 
 ```{r, create email-level dataset}
-# Expand to one row per email, keeping all grant info
-# Note: pi_names kept as comma-separated (names/emails don't always match 1:1)
+# Expand to one row per email (split pi_emails into separate rows)
 nsf_emails <- nsf_analysis %>%
+  separate_rows(pi_emails, sep = ",\\s*") %>%
   filter(!is.na(pi_emails) & pi_emails != "") %>%
-  mutate(email = str_split(pi_emails, ",\\s*")) %>%
-  unnest(email) %>%
-  mutate(email = str_trim(email)) %>%
-  filter(email != "" & !is.na(email)) %>%
-  filter(str_detect(email, "@")) %>%
-  filter(!str_detect(email, "@SIDDUPLICATE\\.sid$")) %>%
-  select(-pi_emails) %>%
-  relocate(grant_id, pi_names, email) %>%
-  arrange(desc(was_cut), grant_id, email)
+  filter(str_detect(pi_emails, "@")) %>%
+  filter(!str_detect(pi_emails, "@SIDDUPLICATE\\.sid$"))
 
 write_csv(nsf_emails, here('output/nsf_emails.csv'))
 
 cat("Email dataset:", nrow(nsf_emails), "rows\n")
-cat("Unique grants:", n_distinct(nsf_emails$grant_id), "\n")
-cat("Unique emails:", n_distinct(nsf_emails$email), "\n")
+cat("Unique emails:", n_distinct(nsf_emails$pi_emails), "\n")
 cat("Cut grant rows:", sum(nsf_emails$was_cut), "\n")
-
-# To get unique email list for sending survey:
-# nsf_emails %>% distinct(email, .keep_all = TRUE)
-#
-# To filter by directorate first:
-# nsf_emails %>% filter(directorate == "SBE") %>% distinct(email, .keep_all = TRUE)
 ```
 
 ## Read in raw data_raw files Terminated Grants
