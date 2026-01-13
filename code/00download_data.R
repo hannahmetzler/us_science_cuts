@@ -1,5 +1,4 @@
-# Download data files for US Science Cuts analysis
-# Run this script to obtain the required data files
+# Explanation to download data files for US Science Cuts analysis
 
 library(here)
 
