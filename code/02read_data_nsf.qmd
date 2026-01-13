@@ -11,7 +11,7 @@ library(here)
 ```
 
 
-## Read in and join NSF Data
+# Read in and join NSF Data (Sources: NSF and Grant Witness)
 
 ```{r}
 # NSF all grants 2020-2025, exported from website via json files: https://www.nsf.gov/awardsearch/download-awards
@@ -44,7 +44,11 @@ col_spec <- cols(
   .default = col_guess()
 )
 nsf_cut <- read_csv(here('data/grant_witness_nsf_terminations.csv'), col_types = col_spec)
+glimpse(nsf_cut)
 ```
+
+## Check if coosa data on cut grants is more or less comprehensive than Grant Witness data
+
 ```{r, check which grants got lost from nsf_cut}
 # SOURCE: COOSA: https://cossa.org/nsf-releases-list-of-terminated-grants/
 # to do: match award ID to NSF data_raw by grant witness, that is most likely more comprehensive (n=1667 rows)
@@ -54,8 +58,50 @@ nsf_cut2 = readr::read_csv(here('data/cossa_NSF-Terminated-Awards.csv'), col_typ
 # which grants in nsf_cut2 are not included in nsf_cut? None are not included. We can safely ignore data from the coosa website.  
 nsf_cut2_missing <- nsf_cut2 %>%
   anti_join(nsf_cut, by = c("Award ID" = "grant_id"))
-nrow(nsf_cut2_missing)
+cat("Grants from COSSA not contained in Grant Witness NSF data:", nrow(nsf_cut2_missing), "\n")
 ```
+
+## Which budget columns should we keep? 
+ 
+### From the nsf_cut file (Grant Witness data):
+
+NSF-sourced:
+  - nsf_total_budget: Total budget from NSF
+  - nsf_obligated: Amount NSF has committed (obligated)
+
+  USAspending-sourced:
+  - usasp_total_obligated: Total obligated per USAspending
+  - usasp_total_obligated_corrected: Corrected version (possibly accounting for errors)
+  - usasp_outlaid: Amount actually paid out (disbursed)
+
+  Calculated/estimated: The estimated_ columns seem to be derived/calculated columns by Grant Witness, likely to reconcile discrepancies between NSF and USAspending data sources
+  - estimated_budget: Likely derived from above sources
+  - estimated_outlays: Estimated amount spent
+  - estimated_remaining: Budget minus spent (the "lost" money)
+
+  Termination-specific:
+  - post_termination_deobligation: Money clawed back after termination
+
+  ### From nsf_all (official NSF data):
+
+  For the nsf_all data, tot_intn_awd_amt and awd_amount are the official NSF grant values which apply to ALL grants (not just terminated ones).
+
+  - tot_intn_awd_amt → total_budget: The total intended award amount (full planned grant value)
+  - awd_amount → amount_awarded: Actual awarded amount (may differ from intended if grant was modified)
+
+  ### Which columns should we keep from each dataset?
+
+  1. Use nsf_all for base budget info (total_budget, amount_awarded) - it's authoritative for all grants
+  2. From nsf_cut, keep only what's unique to terminated grants:
+    - usasp_outlaid - actual money spent (useful for analyzing impact)
+    - estimated_remaining - money "lost" when grant was cut
+    - post_termination_deobligation - money clawed back
+
+We could simplify to keep estimated_budget, estimated_outlays, estimated_remaining instead - they're a coherent set. However:
+
+  - usasp_outlaid is more authoritative (direct from USAspending) than estimated_outlays 
+
+## Join NSF all and NSF cut data, remove redundant columns
 
 ```{r, join nsf_all and nsf_cut}
 # Strategy: nsf_all is the authoritative source for grant metadata.
@@ -87,6 +133,8 @@ nsf_joined <- nsf_all %>%
 glimpse(nsf_joined)
 ```
 
+## Check join results
+
 ```{r, check join results}
 # How many grants were cut?
 cat("Cut grants in joined data:", sum(nsf_joined$was_cut), "\n")
@@ -97,6 +145,8 @@ nsf_cut_lost <- nsf_cut %>%
   anti_join(nsf_all, by = "grant_id")
 cat("Cut grants not found in nsf_all:", nrow(nsf_cut_lost), "\n")
 ```
+
+## Create an analysis dataset: select and rename columns 
 
 ```{r, create analysis dataset}
 # Select and rename columns for analysis
@@ -131,8 +181,10 @@ cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), 
 glimpse(nsf_analysis)
 ```
 
-```{r, create email-level dataset}
 # Expand to one row per email (split pi_emails into separate rows)
+
+```{r, create email-level dataset}
+
 nsf_emails <- nsf_analysis %>%
   separate_rows(pi_emails, sep = ",\\s*") %>%
   filter(!is.na(pi_emails) & pi_emails != "") %>%
