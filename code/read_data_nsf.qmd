@@ -1,0 +1,147 @@
+---
+title: "Read clean and join NSF data"
+format: html
+editor: source
+---
+
+```{r}
+# Packages
+library(tidyverse)
+library(here)
+```
+
+
+## Read in and join NSF Data
+
+```{r}
+# NSF all grants 2020-2025, exported from website via json files: https://www.nsf.gov/awardsearch/download-awards
+# Define a column specification: force awd_id to character
+col_spec <- cols(
+  awd_id = col_character(),
+  .default = col_guess()  # everything else guessed automatically
+)
+
+# Read both files with the same column specification
+nsf_2014_2019 <- read_tsv(here('data/NSF_all_grants_2019-2014.tsv'), col_types = col_spec)
+nsf_2020_2026 <- read_tsv(here('data/NSF_all_grants_2026-2020.tsv'), col_types = col_spec)
+
+# Combine
+nsf_all <- bind_rows(nsf_2014_2019, nsf_2020_2026)
+
+#remove from environment
+nsf_2014_2019 = NULL
+nsf_2020_2026 = NULL
+
+# select required columns from nsf_all
+nsf_all = nsf_all %>%
+  select(c(awd_id, agcy_id, pi_names, awd_titl_txt, awd_eff_date, awd_exp_date, tot_intn_awd_amt, awd_amount, pi_emails, inst_name, inst_state, fund_oblg_amt, awd_abstract_narration))
+
+# NSF cut grants from grantwitness.us
+col_spec <- cols(
+  grant_id = col_character(),
+  award_type = col_factor(),
+  directorate = col_factor(),
+  .default = col_guess()
+)
+nsf_cut <- read_csv(here('data/grant_witness_nsf_terminations.csv'), col_types = col_spec)
+```
+```{r, check which grants got lost from nsf_cut}
+# SOURCE: COOSA: https://cossa.org/nsf-releases-list-of-terminated-grants/
+# to do: match award ID to NSF data_raw by grant witness, that is most likely more comprehensive (n=1667 rows)
+nsf_cut2 = readr::read_csv(here('data/cossa_NSF-Terminated-Awards.csv'), col_types = 'cccccl') |> # delete columns without names and mostly NA cells (...6)
+  select(-starts_with("..."))
+
+# which grants in nsf_cut2 are not included in nsf_cut? None are not included. We can safely ignore data from the coosa website.  
+nsf_cut2_missing <- nsf_cut2 %>%
+  anti_join(nsf_cut, by = c("Award ID" = "grant_id"))
+nrow(nsf_cut2_missing)
+```
+
+```{r, join nsf_all and nsf_cut}
+# Strategy: nsf_all is the authoritative source for grant metadata.
+# From nsf_cut, only keep termination-specific columns (not duplicated in nsf_all).
+
+# Rename grant ID in nsf_all for joining
+nsf_all <- nsf_all %>%
+  rename(grant_id = awd_id)
+
+# From nsf_cut: keep only termination-specific columns + grant_id
+nsf_cut_slim <- nsf_cut %>%
+  select(
+    grant_id,
+    terminated, suspended, termination_date,
+    reinstated, reinstatement_date,
+    cruz_list, nsf_url, usaspending_url,
+    award_type, division, directorate, nsf_program_name,
+    # Spending info (only available for cut grants)
+    usasp_outlaid,          # actual money spent before termination
+    estimated_remaining,    # budget minus spent (money "lost")
+    post_termination_deobligation  # money clawed back
+  )
+
+# Join: all grants from nsf_all, add termination info where available
+nsf_joined <- nsf_all %>%
+  left_join(nsf_cut_slim, by = "grant_id") %>%
+  mutate(was_cut = !is.na(terminated) & terminated == TRUE)
+
+glimpse(nsf_joined)
+```
+
+```{r, check join results}
+# How many grants were cut?
+cat("Cut grants in joined data:", sum(nsf_joined$was_cut), "\n")
+cat("Total cut grants in source:", nrow(nsf_cut), "\n")
+
+# Which grants got lost in the join (not in nsf_all)?
+nsf_cut_lost <- nsf_cut %>%
+  anti_join(nsf_all, by = "grant_id")
+cat("Cut grants not found in nsf_all:", nrow(nsf_cut_lost), "\n")
+```
+
+```{r, create analysis dataset}
+# Select and rename columns for analysis
+# Columns from nsf_all (authoritative source) + termination info from nsf_cut
+nsf_analysis <- nsf_joined %>%
+  select(
+    grant_id,
+    agcy_id,
+    pi_names,
+    pi_emails,
+    title = awd_titl_txt,
+    abstract = awd_abstract_narration,
+    start_date = awd_eff_date,
+    end_date = awd_exp_date,
+    total_budget = tot_intn_awd_amt,
+    amount_awarded = awd_amount,
+    org_name = inst_name,
+    org_state = inst_state,
+    # Termination info from nsf_cut
+    was_cut,
+    terminated, suspended, termination_date,
+    reinstated, reinstatement_date,
+    nsf_url, usaspending_url,
+    award_type, division, directorate, nsf_program_name,
+    # Spending info for cut grants
+    usasp_outlaid, estimated_remaining, post_termination_deobligation
+  ) %>%
+  arrange(desc(was_cut), grant_id)  # cut grants first
+
+write_csv(nsf_analysis, here('output/nsf_analysis.csv'))
+cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
+glimpse(nsf_analysis)
+```
+
+```{r, create email-level dataset}
+# Expand to one row per email (split pi_emails into separate rows)
+nsf_emails <- nsf_analysis %>%
+  separate_rows(pi_emails, sep = ",\\s*") %>%
+  filter(!is.na(pi_emails) & pi_emails != "") %>%
+  filter(str_detect(pi_emails, "@")) %>%
+  filter(!str_detect(pi_emails, "@SIDDUPLICATE\\.sid$"))
+
+write_csv(nsf_emails, here('output/nsf_emails.csv'))
+
+cat("Email dataset:", nrow(nsf_emails), "rows\n")
+cat("Unique emails:", n_distinct(nsf_emails$pi_emails), "\n")
+cat("Cut grant rows:", sum(nsf_emails$was_cut), "\n")
+```
