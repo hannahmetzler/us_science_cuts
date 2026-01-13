@@ -4,174 +4,384 @@ format: html
 editor: source
 ---
 
+# Summary of what this script does
+
+## Data Downloaded
+
+  - NIH ExPORTER: FY 2014-2024, 828,249 US grants (1.9 GB)
+  - FY 2025-2026 not yet available on ExPORTER bulk download
+  - Files saved to data_raw/nih_exporter/
+
+  # Join Test Results
+
+  - 97% match rate: 5,649 of 5,812 cut grants found in ExPORTER
+  - 163 unmatched: Likely FY 2025 grants not yet in ExPORTER
+  - Join key: CORE_PROJECT_NUM (ExPORTER) ↔ core_award_number (Grant Witness)
+
+  ## Column Recommendations
+
+  ### From ExPORTER (23 columns) - authoritative source:
+  - IDs: APPLICATION_ID, CORE_PROJECT_NUM, FULL_PROJECT_NUM
+  - Agency: ADMINISTERING_IC, IC_NAME
+  - PI: PI_IDS, PI_NAMEs
+  - Org: ORG_NAME, ORG_CITY, ORG_STATE
+  - Project: PROJECT_TITLE, PROJECT_TERMS, PHR, NIH_SPENDING_CATS
+  - Dates: FY, PROJECT_START, PROJECT_END
+  - Budget: TOTAL_COST, DIRECT_COST_AMT, INDIRECT_COST_AMT
+  - Metadata: ACTIVITY, FUNDING_MECHANISM, STUDY_SECTION
+
+  ### From Grant Witness (19 columns) - termination-specific only:
+  - Status: status, ever_frozen
+  - Dates: frozen_date, unfrozen_date, termination_date, targeted_start/end_date
+  - Reinstatement: reinstatement_indicator, reinstated_est_date
+  - Spending: total_estimated_outlays, total_estimated_remaining, last_payment_date
+  - Analysis: flagged_words, cancellation_source
+  - Political: org_congdist, us_rep
+  - URLs: usaspending_url, reporter_url
+
+
 ```{r}
 # Packages
 library(tidyverse)
 library(here)
 ```
 
+## Download NIH ExPORTER data
 
-## Read in and join NSF Data
+ExPORTER provides bulk downloads of NIH grant data by fiscal year.
+Source: https://reporter.nih.gov/exporter/
 
-```{r}
-# NSF all grants 2020-2025, exported from website via json files: https://www.nsf.gov/awardsearch/download-awards
-# Define a column specification: force awd_id to character
-col_spec <- cols(
-  awd_id = col_character(),
-  .default = col_guess()  # everything else guessed automatically
+```{r download-exporter}
+# Download ExPORTER project files for fiscal years 2014-2026
+# Files are ZIP archives containing CSV data
+# URL format: https://reporter.nih.gov/exporter/projects/download/<fy>
+
+fiscal_years <- 2014:2026
+data_dir <- here("data_raw/nih_exporter")
+
+# Create directory if it doesn't exist
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
+
+# Download each fiscal year (skip if already downloaded)
+for (fy in fiscal_years) {
+  zip_file <- file.path(data_dir, paste0("RePORTER_PRJ_C_FY", fy, ".zip"))
+
+  if (!file.exists(zip_file)) {
+    url <- paste0("https://reporter.nih.gov/exporter/projects/download/", fy)
+    cat("Downloading FY", fy, "...\n")
+
+    # Try download, handle potential errors
+    tryCatch({
+      download.file(url, zip_file, mode = "wb", quiet = FALSE)
+      cat("  Downloaded successfully\n")
+    }, error = function(e) {
+      cat("  Error downloading FY", fy, ":", e$message, "\n")
+    })
+
+    # Be polite to the server
+    Sys.sleep(2)
+  } else {
+    cat("FY", fy, "already exists, skipping\n")
+  }
+}
+
+# List downloaded files
+list.files(data_dir, pattern = "\\.zip$")
+```
+
+```{r extract-and-read}
+# Extract and read all CSV files from the ZIP archives
+# Filter for US grants only (Organization Country == "UNITED STATES")
+
+read_exporter_year <- function(fy, data_dir) {
+  zip_file <- file.path(data_dir, paste0("RePORTER_PRJ_C_FY", fy, ".zip"))
+
+  if (!file.exists(zip_file)) {
+    cat("ZIP file for FY", fy, "not found\n")
+    return(NULL)
+  }
+
+  # List contents of ZIP file
+  zip_contents <- unzip(zip_file, list = TRUE)
+  csv_file <- zip_contents$Name[grepl("\\.csv$", zip_contents$Name)]
+
+  if (length(csv_file) == 0) {
+    cat("No CSV found in FY", fy, "ZIP\n")
+    return(NULL)
+  }
+
+  # Extract to temp location and read
+  temp_dir <- tempdir()
+  unzip(zip_file, files = csv_file, exdir = temp_dir, overwrite = TRUE)
+
+  # Read CSV
+  df <- read_csv(file.path(temp_dir, csv_file), show_col_types = FALSE)
+
+  # Add fiscal year column if not present
+  if (!"FISCAL_YEAR" %in% names(df)) {
+    df$FISCAL_YEAR <- fy
+  }
+
+  cat("FY", fy, ":", nrow(df), "rows,", ncol(df), "columns\n")
+  return(df)
+}
+
+# Read all fiscal years
+nih_exporter_list <- lapply(fiscal_years, read_exporter_year, data_dir = data_dir)
+
+# Remove NULL entries (failed downloads)
+nih_exporter_list <- nih_exporter_list[!sapply(nih_exporter_list, is.null)]
+
+# Check column consistency across years
+cat("\nColumn counts by year:\n")
+sapply(nih_exporter_list, ncol)
+```
+
+```{r combine-datasets}
+# Combine all years into one dataset
+# First check if columns are consistent
+
+# Get column names from each year
+col_names_list <- lapply(nih_exporter_list, names)
+
+# Find common columns across all years
+common_cols <- Reduce(intersect, col_names_list)
+cat("Common columns across all years:", length(common_cols), "\n")
+
+# Combine using only common columns for safety
+nih_exporter_all <- bind_rows(
+  lapply(nih_exporter_list, function(df) select(df, all_of(common_cols)))
 )
 
-# Read both files with the same column specification
-nsf_2014_2019 <- read_tsv(here('data/NSF_all_grants_2019-2014.tsv'), col_types = col_spec)
-nsf_2020_2026 <- read_tsv(here('data/NSF_all_grants_2026-2020.tsv'), col_types = col_spec)
+cat("\nCombined dataset:\n")
+cat("  Total rows:", nrow(nih_exporter_all), "\n")
+cat("  Total columns:", ncol(nih_exporter_all), "\n")
 
-# Combine
-nsf_all <- bind_rows(nsf_2014_2019, nsf_2020_2026)
+# Filter for United States only
+nih_exporter_usa <- nih_exporter_all %>%
+  filter(ORG_COUNTRY == "UNITED STATES")
 
-#remove from environment
-nsf_2014_2019 = NULL
-nsf_2020_2026 = NULL
+cat("\nUS grants only:\n")
+cat("  Total rows:", nrow(nih_exporter_usa), "\n")
 
-# select required columns from nsf_all
-nsf_all = nsf_all %>%
-  select(c(awd_id, agcy_id, pi_names, awd_titl_txt, awd_eff_date, awd_exp_date, tot_intn_awd_amt, awd_amount, pi_emails, inst_name, inst_state, fund_oblg_amt, awd_abstract_narration))
+# Summary by fiscal year
+cat("\nGrants per fiscal year:\n")
+print(table(nih_exporter_usa$FISCAL_YEAR))
 
-# NSF cut grants from grantwitness.us
-col_spec <- cols(
-  grant_id = col_character(),
-  award_type = col_factor(),
-  directorate = col_factor(),
-  .default = col_guess()
+# Clean up memory
+rm(nih_exporter_list, nih_exporter_all)
+gc()
+```
+
+## Read Grant Witness NIH terminations
+
+```{r read-grant-witness}
+# SOURCE: Grant Witness - https://www.grant-witness.us
+nih_cut <- read_csv(here('data/grant_witness_nih_terminations.csv'), show_col_types = FALSE)
+
+cat("Grant Witness NIH terminations:\n")
+cat("  Rows:", nrow(nih_cut), "\n")
+cat("  Columns:", ncol(nih_cut), "\n")
+```
+
+## Column Analysis and Recommendations
+
+### ExPORTER Columns (46 columns) - Authoritative source for all grants
+
+**Identifiers:**
+- APPLICATION_ID, CORE_PROJECT_NUM (join key), FULL_PROJECT_NUM
+- SERIAL_NUMBER, SUBPROJECT_ID, SUFFIX, SUPPORT_YEAR
+
+**Grant metadata:**
+- ACTIVITY, APPLICATION_TYPE, FUNDING_MECHANISM, CFDA_CODE, OPPORTUNITY NUMBER
+
+**Agency/Admin:**
+- ADMINISTERING_IC, IC_NAME, FUNDING_ICs, PROGRAM_OFFICER_NAME
+- STUDY_SECTION, STUDY_SECTION_NAME
+
+**Organization:**
+- ORG_NAME, ORG_CITY, ORG_STATE, ORG_COUNTRY, ORG_DEPT, ORG_ZIPCODE
+- ORG_DISTRICT, ORG_DUNS, ORG_FIPS, ORG_IPF_CODE, ED_INST_TYPE
+
+**PI:** PI_IDS, PI_NAMEs
+
+**Project:** PROJECT_TITLE, PROJECT_TERMS, PHR, NIH_SPENDING_CATS
+
+**Dates:** FY, PROJECT_START, PROJECT_END, BUDGET_START, BUDGET_END, AWARD_NOTICE_DATE
+
+**Budget:** TOTAL_COST, DIRECT_COST_AMT, INDIRECT_COST_AMT, TOTAL_COST_SUB_PROJECT
+
+### Grant Witness Columns (56 columns) - Termination-specific data
+
+**Overlapping with ExPORTER (use ExPORTER version):**
+- project_title, activity_code, org_name, org_state, org_city, terms
+- phr_text, study_section, foa, total_award
+
+**Unique termination-specific columns to KEEP:**
+- status, ever_frozen, frozen_date, unfrozen_date
+- termination_date, targeted_start_date, targeted_end_date
+- reinstatement_indicator, reinstated_est_date, reinstatement_case
+- last_payment_date, cancellation_source
+- total_estimated_outlays, total_estimated_remaining
+- file_c_outlays (detailed outlay history)
+- flagged_words (analysis of concerning terms)
+- us_rep, us_rep_phone, org_congdist (political data)
+- court_reported, court_restoration_url (legal info)
+- usaspending_url, taggs_url, reporter_url (reference links)
+
+```{r column-recommendation}
+# Recommended columns from each dataset
+
+# From ExPORTER (authoritative grant data)
+exporter_cols <- c(
+  # IDs
+  "APPLICATION_ID", "CORE_PROJECT_NUM", "FULL_PROJECT_NUM",
+  # Agency
+  "ADMINISTERING_IC", "IC_NAME",
+  # PI
+  "PI_IDS", "PI_NAMEs",
+  # Organization
+  "ORG_NAME", "ORG_CITY", "ORG_STATE",
+  # Project
+  "PROJECT_TITLE", "PROJECT_TERMS", "PHR", "NIH_SPENDING_CATS",
+  # Dates
+  "FY", "PROJECT_START", "PROJECT_END",
+  # Budget
+  "TOTAL_COST", "DIRECT_COST_AMT", "INDIRECT_COST_AMT",
+  # Metadata
+  "ACTIVITY", "FUNDING_MECHANISM", "STUDY_SECTION"
 )
-nsf_cut <- read_csv(here('data/grant_witness_nsf_terminations.csv'), col_types = col_spec)
-```
-```{r, check which grants got lost from nsf_cut}
-# SOURCE: COOSA: https://cossa.org/nsf-releases-list-of-terminated-grants/
-# to do: match award ID to NSF data_raw by grant witness, that is most likely more comprehensive (n=1667 rows)
-nsf_cut2 = readr::read_csv(here('data/cossa_NSF-Terminated-Awards.csv'), col_types = 'cccccl') |> # delete columns without names and mostly NA cells (...6)
-  select(-starts_with("..."))
 
-# which grants in nsf_cut2 are not included in nsf_cut? None are not included. We can safely ignore data from the coosa website.  
-nsf_cut2_missing <- nsf_cut2 %>%
-  anti_join(nsf_cut, by = c("Award ID" = "grant_id"))
-nrow(nsf_cut2_missing)
-```
+# From Grant Witness (termination-specific only)
+grantwitness_cols <- c(
+  # Join key
+  "core_award_number",
+  # Status
+  "status", "ever_frozen",
+  # Termination dates
+  "frozen_date", "unfrozen_date", "termination_date",
+  "targeted_start_date", "targeted_end_date",
+  # Reinstatement
+  "reinstatement_indicator", "reinstated_est_date",
+  # Spending
+  "total_estimated_outlays", "total_estimated_remaining",
+  "last_payment_date", "cancellation_source",
+  # Analysis
+  "flagged_words",
+  # Political
+  "org_congdist", "us_rep",
+  # URLs
+  "usaspending_url", "reporter_url"
+)
 
-```{r, join nsf_all and nsf_cut}
-# Strategy: nsf_all is the authoritative source for grant metadata.
-# From nsf_cut, only keep termination-specific columns (not duplicated in nsf_all).
-
-# Rename grant ID in nsf_all for joining
-nsf_all <- nsf_all %>%
-  rename(grant_id = awd_id)
-
-# From nsf_cut: keep only termination-specific columns + grant_id
-nsf_cut_slim <- nsf_cut %>%
-  select(
-    grant_id,
-    terminated, suspended, termination_date,
-    reinstated, reinstatement_date,
-    cruz_list, nsf_url, usaspending_url,
-    award_type, division, directorate, nsf_program_name,
-    # Spending info (only available for cut grants)
-    usasp_outlaid,          # actual money spent before termination
-    estimated_remaining,    # budget minus spent (money "lost")
-    post_termination_deobligation  # money clawed back
-  )
-
-# Join: all grants from nsf_all, add termination info where available
-nsf_joined <- nsf_all %>%
-  left_join(nsf_cut_slim, by = "grant_id") %>%
-  mutate(was_cut = !is.na(terminated) & terminated == TRUE)
-
-glimpse(nsf_joined)
+cat("Recommended ExPORTER columns:", length(exporter_cols), "\n")
+cat("Recommended Grant Witness columns:", length(grantwitness_cols), "\n")
 ```
 
-```{r, check join results}
-# How many grants were cut?
-cat("Cut grants in joined data:", sum(nsf_joined$was_cut), "\n")
-cat("Total cut grants in source:", nrow(nsf_cut), "\n")
+## Test Join Strategy
 
-# Which grants got lost in the join (not in nsf_all)?
-nsf_cut_lost <- nsf_cut %>%
-  anti_join(nsf_all, by = "grant_id")
-cat("Cut grants not found in nsf_all:", nrow(nsf_cut_lost), "\n")
+Join on CORE_PROJECT_NUM (ExPORTER) = core_award_number (Grant Witness)
+
+```{r test-join}
+# Join statistics
+matched <- nih_cut %>%
+  semi_join(nih_exporter_usa, by = c("core_award_number" = "CORE_PROJECT_NUM"))
+
+unmatched <- nih_cut %>%
+  anti_join(nih_exporter_usa, by = c("core_award_number" = "CORE_PROJECT_NUM"))
+
+cat("Join results:\n")
+cat("  Total cut grants:", nrow(nih_cut), "\n")
+cat("  Matched in ExPORTER:", nrow(matched), "(", round(100*nrow(matched)/nrow(nih_cut), 1), "%)\n")
+cat("  Unmatched (likely FY 2025):", nrow(unmatched), "\n")
 ```
 
-```{r, create analysis dataset}
-# Select and rename columns for analysis
-# Columns from nsf_all (authoritative source) + termination info from nsf_cut
-nsf_analysis <- nsf_joined %>%
-  select(
-    grant_id,
-    agcy_id,
-    pi_names,
-    pi_emails,
-    title = awd_titl_txt,
-    abstract = awd_abstract_narration,
-    start_date = awd_eff_date,
-    end_date = awd_exp_date,
-    total_budget = tot_intn_awd_amt,
-    amount_awarded = awd_amount,
-    org_name = inst_name,
-    org_state = inst_state,
-    # Termination info from nsf_cut
-    was_cut,
-    terminated, suspended, termination_date,
-    reinstated, reinstatement_date,
-    nsf_url, usaspending_url,
-    award_type, division, directorate, nsf_program_name,
-    # Spending info for cut grants
-    usasp_outlaid, estimated_remaining, post_termination_deobligation
-  ) %>%
-  arrange(desc(was_cut), grant_id)  # cut grants first
+## Create Joined Analysis Dataset
 
-write_csv(nsf_analysis, here('output/nsf_analysis.csv'))
-cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
-glimpse(nsf_analysis)
+Strategy: ExPORTER is authoritative. Keep most recent FY record per grant.
+Add termination info from Grant Witness where available.
+
+```{r create-joined-dataset}
+# Get most recent ExPORTER record per grant
+nih_exporter_latest <- nih_exporter_usa %>%
+  group_by(CORE_PROJECT_NUM) %>%
+  filter(FY == max(FY)) %>%
+  slice(1) %>%  # In case of ties, take first
+  ungroup()
+
+cat("ExPORTER deduplicated:", nrow(nih_exporter_latest), "unique grants\n")
+
+# Select columns from Grant Witness (termination-specific only)
+nih_cut_slim <- nih_cut %>%
+  select(all_of(grantwitness_cols))
+
+# Join: all grants from ExPORTER, add termination info where available
+nih_joined <- nih_exporter_latest %>%
+  select(all_of(exporter_cols)) %>%
+  left_join(nih_cut_slim, by = c("CORE_PROJECT_NUM" = "core_award_number")) %>%
+  mutate(was_cut = !is.na(status))
+
+cat("\nJoined dataset:\n")
+cat("  Total rows:", nrow(nih_joined), "\n")
+cat("  Total columns:", ncol(nih_joined), "\n")
+cat("  Cut grants:", sum(nih_joined$was_cut), "\n")
+cat("  Non-cut grants:", sum(!nih_joined$was_cut), "\n")
+
+glimpse(nih_joined)
 ```
 
-```{r, create email-level dataset}
-# Expand to one row per email (split pi_emails into separate rows)
-nsf_emails <- nsf_analysis %>%
-  separate_rows(pi_emails, sep = ",\\s*") %>%
-  filter(!is.na(pi_emails) & pi_emails != "") %>%
-  filter(str_detect(pi_emails, "@")) %>%
-  filter(!str_detect(pi_emails, "@SIDDUPLICATE\\.sid$"))
+```{r check-lost-grants}
+# Which cut grants were lost in the join (not in ExPORTER)?
+lost_cuts <- nih_cut %>%
+  anti_join(nih_exporter_usa, by = c("core_award_number" = "CORE_PROJECT_NUM"))
 
-write_csv(nsf_emails, here('output/nsf_emails.csv'))
+cat("Cut grants not found in ExPORTER:", nrow(lost_cuts), "\n")
+cat("These are likely FY 2025 grants not yet in ExPORTER bulk download.\n")
 
-cat("Email dataset:", nrow(nsf_emails), "rows\n")
-cat("Unique emails:", n_distinct(nsf_emails$pi_emails), "\n")
-cat("Cut grant rows:", sum(nsf_emails$was_cut), "\n")
+# Show sample
+if (nrow(lost_cuts) > 0) {
+  cat("\nSample lost grants:\n")
+  print(head(lost_cuts %>% select(core_award_number, project_title, status), 10))
+}
 ```
 
-## Read in raw data_raw files Terminated Grants
-
-```{r}
-# SOURCE: Grant Witness
-# nih: cut columns ...59 to ...59
-nih = readr::read_csv(here('data/grant_witness_nih_terminations.csv'))
-epa = readr::read_csv(here('data/grant_witness_epa_terminations.csv'))
-
-
+```{r save-analysis-dataset}
+# Save joined dataset
+write_csv(nih_joined, here('data_analysis/nih_analysis.csv'))
+cat("NIH analysis dataset:", nrow(nih_joined), "grants,", ncol(nih_joined), "columns\n")
+cat("Saved to data_analysis/nih_analysis.csv\n")
 ```
 
 
-## Read in raw data_raw files ALL GRANTS NIH
+# Notes on the analysis file
 
-```{r}
-# skip first 5 lines for nih reporter data_raw files (info in header), delete column ...5
-nih_all_2025 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2025_USA.csv'), skip = 5)
-nih_all_2024 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2024_USA.csv'), skip = 5)
-nih_all_2023 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2023_USA.csv'), skip = 5)
-nih_all_2022 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2022_USA.csv'), skip = 5)
-nih_all_2021 = readr::read_csv(here('data_raw/nih_reporter_all_grants_2021_USA.csv'), skip = 5)
-glimpse(nih_all_2025)
-dim(nih_all_2025) # has 15389 lines, so some grants might have been cut, max 15000
-tail(nih_all_2025)["Contact PI / Project Leader"]
-```
+NIH Analysis Dataset Created
 
+  File: data_analysis/nih_analysis.csv (493 MB)
 
+  Dataset Statistics
 
+  | Metric         | Count   |
+  |----------------|---------|
+  | Total rows     | 218,480 |
+  | Total columns  | 42      |
+  | Cut grants     | 5,675   |
+  | Non-cut grants | 212,805 |
+  | Match rate     | 97.2%   |
 
+  Lost Grants (163)
+
+  The 163 unmatched cut grants appear to be:
+  - FY 2025 grants not yet in ExPORTER bulk download
+  - Some have no project title (e.g., AY2AX prefixed awards)
+  - Mostly newer fellowship awards (F30, F31, K-series)
+
+  Column Structure (42 columns)
+
+  - 23 from ExPORTER: Grant metadata, PI info, org info, dates, budget
+  - 18 from Grant Witness: Termination status, dates, spending, political info, URLs
+  - 1 derived: was_cut (TRUE/FALSE flag)
+
+  The dataset follows the same structure as your NSF analysis - ExPORTER as authoritative source for all grants, with termination-specific info from Grant Witness added where applicable.
