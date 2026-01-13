@@ -1,5 +1,5 @@
 ---
-title: "Read csvs cut grants and all grants"
+title: "Read, clean and join NIH data"
 format: html
 editor: source
 ---
