@@ -171,6 +171,100 @@ rm(nih_exporter_list, nih_exporter_all)
 gc()
 ```
 
+## Read manually downloaded 2025 NIH Reporter data
+
+NIH Reporter manual downloads (FY 2025) were split by agency groups to avoid the 15,000 record download limit. Files include agencies in the filename.
+
+```{r read-manual-2025}
+# Find all 2025 manual download CSV files
+manual_2025_files <- list.files(
+  data_dir,
+  pattern = "nih_exporter_year2025.*\\.csv$",
+  full.names = TRUE
+)
+
+cat("Found", length(manual_2025_files), "manual 2025 files:\n")
+print(basename(manual_2025_files))
+
+# Function to read a manual 2025 download file
+# These files have 7 header rows before the column names
+read_manual_2025 <- function(file_path) {
+  # Read skipping the first 7 rows (header metadata)
+  df <- read_csv(file_path, skip = 7, show_col_types = FALSE)
+
+  # Rename columns to match ExPORTER bulk download format
+  df <- df %>%
+    rename(
+      APPLICATION_ID = `Application ID`,
+      FULL_PROJECT_NUM = `Project Number`,
+      IC_NAME = `Administering IC`,  # Note: Reporter uses IC code, not full name
+      PI_NAMEs = `Contact PI / Project Leader`,
+      ORG_NAME = `Organization Name`,
+      ORG_CITY = `Organization City`,
+      ORG_STATE = `Organization State`,
+      ORG_COUNTRY = `Organization Country`,
+      ED_INST_TYPE = `Organization Type`,
+      PROJECT_TITLE = `Project Title`,
+      PROJECT_TERMS = `Project Terms`,
+      PHR = `Public Health Relevance`,
+      NIH_SPENDING_CATS = `NIH Spending Categorization`,
+      FISCAL_YEAR = `Fiscal Year`,
+      PROJECT_START = `Project Start Date`,
+      PROJECT_END = `Project End Date`,
+      TOTAL_COST = `Total Cost`,
+      STUDY_SECTION_NAME = `Study Section`,
+      ACTIVITY = `Activity`,
+      SERIAL_NUMBER = `Serial Number`
+    )
+
+  # Extract CORE_PROJECT_NUM from FULL_PROJECT_NUM
+  # FULL_PROJECT_NUM format: "3R01FD007630-01S4" -> CORE_PROJECT_NUM: "R01FD007630"
+  df <- df %>%
+    mutate(
+      CORE_PROJECT_NUM = str_extract(FULL_PROJECT_NUM, "[A-Z][0-9]{2}[A-Z]{2}[0-9]+")
+    )
+
+  cat("  Read", basename(file_path), ":", nrow(df), "rows\n")
+  return(df)
+}
+
+# Read all manual 2025 files
+nih_2025_list <- lapply(manual_2025_files, read_manual_2025)
+
+# Combine all 2025 data
+nih_2025_all <- bind_rows(nih_2025_list)
+
+cat("\nManual 2025 data combined:\n")
+cat("  Total rows:", nrow(nih_2025_all), "\n")
+cat("  Unique grants:", n_distinct(nih_2025_all$CORE_PROJECT_NUM), "\n")
+
+# Clean up
+rm(nih_2025_list)
+```
+
+```{r combine-with-exporter}
+# Combine 2025 manual data with ExPORTER bulk data (2014-2024)
+# Select common columns for binding
+
+common_cols_2025 <- intersect(names(nih_exporter_usa), names(nih_2025_all))
+cat("Common columns between ExPORTER and 2025 manual:", length(common_cols_2025), "\n")
+
+# Add 2025 data to ExPORTER USA data
+nih_exporter_usa <- bind_rows(
+  nih_exporter_usa,
+  nih_2025_all %>% select(all_of(common_cols_2025))
+)
+
+cat("\nCombined ExPORTER + 2025 manual data:\n")
+cat("  Total rows:", nrow(nih_exporter_usa), "\n")
+cat("\nGrants per fiscal year (including 2025):\n")
+print(table(nih_exporter_usa$FISCAL_YEAR))
+
+# Clean up
+rm(nih_2025_all)
+gc()
+```
+
 ## Read Grant Witness NIH terminations
 
 ```{r read-grant-witness}
@@ -243,7 +337,7 @@ exporter_cols <- c(
   # Project
   "PROJECT_TITLE", "PROJECT_TERMS", "PHR", "NIH_SPENDING_CATS",
   # Dates
-  "FY", "PROJECT_START", "PROJECT_END",
+  "FISCAL_YEAR", "PROJECT_START", "PROJECT_END",
   # Budget
   "TOTAL_COST", 
 )
