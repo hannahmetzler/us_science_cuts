@@ -56,7 +56,7 @@ Source: https://reporter.nih.gov/exporter/
 # Files are ZIP archives containing CSV data
 # URL format: https://reporter.nih.gov/exporter/projects/download/<fy>
 
-fiscal_years <- 2014:2026
+fiscal_years <- 2014:2024 # (2025 and 2026 don't exist as bulk download)
 data_dir <- here("data_raw/nih_exporter")
 
 # Create directory if it doesn't exist
@@ -133,24 +133,20 @@ nih_exporter_list <- lapply(fiscal_years, read_exporter_year, data_dir = data_di
 
 # Remove NULL entries (failed downloads)
 nih_exporter_list <- nih_exporter_list[!sapply(nih_exporter_list, is.null)]
-
-# Check column consistency across years
-cat("\nColumn counts by year:\n")
-sapply(nih_exporter_list, ncol)
 ```
 
 ```{r combine-datasets}
 # Combine all years into one dataset
 # First check if columns are consistent
 
-# Get column names from each year
+# Get column names from each year - step not necessary
 col_names_list <- lapply(nih_exporter_list, names)
 
-# Find common columns across all years
+# Find common columns across all years - step not necessary
 common_cols <- Reduce(intersect, col_names_list)
 cat("Common columns across all years:", length(common_cols), "\n")
 
-# Combine using only common columns for safety
+# Combine using only common columns for safety - adapt if you delete steps above
 nih_exporter_all <- bind_rows(
   lapply(nih_exporter_list, function(df) select(df, all_of(common_cols)))
 )
@@ -239,19 +235,17 @@ exporter_cols <- c(
   # IDs
   "APPLICATION_ID", "CORE_PROJECT_NUM", "FULL_PROJECT_NUM",
   # Agency
-  "ADMINISTERING_IC", "IC_NAME",
+  "IC_NAME", "STUDY_SECTION_NAME",
   # PI
-  "PI_IDS", "PI_NAMEs",
+  "PI_NAMEs",
   # Organization
-  "ORG_NAME", "ORG_CITY", "ORG_STATE",
+  "ORG_NAME", "ORG_CITY", "ORG_STATE", "ED_INST_TYPE",
   # Project
   "PROJECT_TITLE", "PROJECT_TERMS", "PHR", "NIH_SPENDING_CATS",
   # Dates
   "FY", "PROJECT_START", "PROJECT_END",
   # Budget
-  "TOTAL_COST", "DIRECT_COST_AMT", "INDIRECT_COST_AMT",
-  # Metadata
-  "ACTIVITY", "FUNDING_MECHANISM", "STUDY_SECTION"
+  "TOTAL_COST", 
 )
 
 # From Grant Witness (termination-specific only)
@@ -276,8 +270,8 @@ grantwitness_cols <- c(
   "usaspending_url", "reporter_url"
 )
 
-cat("Recommended ExPORTER columns:", length(exporter_cols), "\n")
-cat("Recommended Grant Witness columns:", length(grantwitness_cols), "\n")
+cat("Selected ExPORTER columns:", length(exporter_cols), "\n")
+cat("Selected Grant Witness columns:", length(grantwitness_cols), "\n")
 ```
 
 ## Test Join Strategy
