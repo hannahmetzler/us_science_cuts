@@ -119,6 +119,11 @@ read_exporter_year <- function(fy, data_dir) {
   # Read CSV
   df <- read_csv(file.path(temp_dir, csv_file), show_col_types = FALSE)
 
+  # Ensure consistent column types across years (some columns are empty in certain years)
+  if ("SUBPROJECT_ID" %in% names(df)) {
+    df$SUBPROJECT_ID <- as.character(df$SUBPROJECT_ID)
+  }
+
   # Add fiscal year column if not present
   if (!"FISCAL_YEAR" %in% names(df)) {
     df$FISCAL_YEAR <- fy
