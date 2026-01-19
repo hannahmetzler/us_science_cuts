@@ -174,6 +174,10 @@ print(table(nih_exporter_usa$FISCAL_YEAR))
 # Clean up memory
 rm(nih_exporter_list, nih_exporter_all)
 gc()
+
+# Save checkpoint: ExPORTER 2014-2024 data
+saveRDS(nih_exporter_usa, here("data/nih_exporter_usa_2014_2024.rds"))
+# To reload: nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2024.rds"))
 ```
 
 ## Read manually downloaded 2025 NIH Reporter data
@@ -245,6 +249,10 @@ cat("  Unique grants:", n_distinct(nih_2025_all$CORE_PROJECT_NUM), "\n")
 
 # Clean up
 rm(nih_2025_list)
+
+# Save checkpoint: 2025 manual download data
+saveRDS(nih_2025_all, here("data/nih_2025_manual.rds"))
+# To reload: nih_2025_all <- readRDS(here("data/nih_2025_manual.rds"))
 ```
 
 ```{r combine-with-exporter}
@@ -268,6 +276,10 @@ print(table(nih_exporter_usa$FISCAL_YEAR))
 # Clean up
 rm(nih_2025_all)
 gc()
+
+# Save checkpoint: Combined ExPORTER 2014-2024 + 2025 manual data
+saveRDS(nih_exporter_usa, here("data/nih_exporter_usa_2014_2025.rds"))
+# To reload: nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2025.rds"))
 ```
 
 ## Read Grant Witness NIH terminations
