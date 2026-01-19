@@ -43,6 +43,7 @@ editor: source
 ```{r}
 # Packages
 library(tidyverse)
+library(lubridate)  # for date parsing (mdy)
 library(here)
 ```
 
@@ -224,6 +225,13 @@ read_manual_2025 <- function(file_path) {
       STUDY_SECTION_NAME = `Study Section`,
       ACTIVITY = `Activity`,
       SERIAL_NUMBER = `Serial Number`
+    )
+
+  # Convert date columns from character (m/d/Y format) to Date
+  df <- df %>%
+    mutate(
+      PROJECT_START = mdy(PROJECT_START),
+      PROJECT_END = mdy(PROJECT_END)
     )
 
   # Extract CORE_PROJECT_NUM from FULL_PROJECT_NUM
