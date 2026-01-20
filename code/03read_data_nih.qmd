@@ -16,19 +16,19 @@ editor: source
 
   - 97% match rate: 5,649 of 5,812 cut grants found in ExPORTER
   - 163 unmatched: Likely FY 2025 grants not yet in ExPORTER
-  - Join key: CORE_PROJECT_NUM (ExPORTER) ↔ core_award_number (Grant Witness)
+  - Join key: core_project_num (ExPORTER) ↔ core_award_number (Grant Witness)
 
   ## Column Recommendations
 
   ### From ExPORTER (23 columns) - authoritative source:
-  - IDs: APPLICATION_ID, CORE_PROJECT_NUM, FULL_PROJECT_NUM
-  - Agency: ADMINISTERING_IC, IC_NAME
-  - PI: PI_IDS, PI_NAMEs
-  - Org: ORG_NAME, ORG_CITY, ORG_STATE
-  - Project: PROJECT_TITLE, PROJECT_TERMS, PHR (Public Health Relevance), NIH_SPENDING_CATS, ABSTRACT_TEXT
-  - Dates: FY, PROJECT_START, PROJECT_END
-  - Budget: TOTAL_COST, DIRECT_COST_AMT, INDIRECT_COST_AMT
-  - Metadata: ACTIVITY, FUNDING_MECHANISM, STUDY_SECTION
+  - IDs: application_id, core_project_num, full_project_num
+  - Agency: administering_ic, ic_name
+  - PI: pi_ids, pi_names
+  - Org: org_name, org_city, org_state
+  - Project: project_title, project_terms, phr (Public Health Relevance), nih_spending_cats, abstract_text
+  - Dates: fiscal_year, project_start, project_end
+  - Budget: total_cost, direct_cost_amt, indirect_cost_amt
+  - Metadata: activity, funding_mechanism, study_section
 
   ### From Grant Witness (19 columns) - termination-specific only:
   - Status: status, ever_frozen
@@ -453,27 +453,27 @@ cat("  Columns:", ncol(nih_cut), "\n")
 ### ExPORTER Columns (48 columns) - Authoritative source for all grants
 
 **Identifiers:**
-- APPLICATION_ID, CORE_PROJECT_NUM (join key), FULL_PROJECT_NUM
-- SERIAL_NUMBER, SUBPROJECT_ID, SUFFIX, SUPPORT_YEAR
+- application_id, core_project_num (join key), full_project_num
+- serial_number, subproject_id, suffix, support_year
 
 **Grant metadata:**
-- ACTIVITY, APPLICATION_TYPE, FUNDING_MECHANISM, CFDA_CODE, OPPORTUNITY NUMBER
+- activity, application_type, funding_mechanism, cfda_code, foa_number
 
 **Agency/Admin:**
-- ADMINISTERING_IC, IC_NAME, FUNDING_ICs, PROGRAM_OFFICER_NAME
-- STUDY_SECTION, STUDY_SECTION_NAME
+- administering_ic, ic_name, funding_ics, program_officer_name
+- study_section, study_section_name
 
 **Organization:**
-- ORG_NAME, ORG_CITY, ORG_STATE, ORG_COUNTRY, ORG_DEPT, ORG_ZIPCODE
-- ORG_DISTRICT, ORG_DUNS, ORG_FIPS, ORG_IPF_CODE, ED_INST_TYPE
+- org_name, org_city, org_state, org_country, org_dept, org_zipcode
+- org_district, org_duns, org_fips, org_ipf_code, ed_inst_type
 
-**PI:** PI_IDS, PI_NAMEs
+**PI:** pi_ids, pi_names
 
-**Project:** PROJECT_TITLE, PROJECT_TERMS, PHR, NIH_SPENDING_CATS
+**Project:** project_title, project_terms, phr, nih_spending_cats
 
-**Dates:** FY, PROJECT_START, PROJECT_END, BUDGET_START, BUDGET_END, AWARD_NOTICE_DATE
+**Dates:** fiscal_year, project_start, project_end, budget_start, budget_end, award_notice_date
 
-**Budget:** TOTAL_COST, DIRECT_COST_AMT, INDIRECT_COST_AMT, TOTAL_COST_SUB_PROJECT
+**Budget:** total_cost, direct_cost_amt, indirect_cost_amt, total_cost_sub_project
 
 ### Grant Witness Columns (56 columns) - Termination-specific data
 
