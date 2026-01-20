@@ -92,6 +92,34 @@ for (fy in fiscal_years) {
 list.files(data_dir, pattern = "\\.zip$")
 ```
 
+```{r download-abstracts}
+# Download ExPORTER abstract files for fiscal years 2014-2024
+# URL format: https://reporter.nih.gov/exporter/abstracts/download/<fy>
+
+for (fy in fiscal_years) {
+  zip_file <- file.path(data_dir, paste0("RePORTER_PRJABS_C_FY", fy, ".zip"))
+
+  if (!file.exists(zip_file)) {
+    url <- paste0("https://reporter.nih.gov/exporter/abstracts/download/", fy)
+    cat("Downloading abstracts FY", fy, "...\n")
+
+    tryCatch({
+      download.file(url, zip_file, mode = "wb", quiet = FALSE)
+      cat("  Downloaded successfully\n")
+    }, error = function(e) {
+      cat("  Error downloading abstracts FY", fy, ":", e$message, "\n")
+    })
+
+    Sys.sleep(2)
+  } else {
+    cat("Abstracts FY", fy, "already exists, skipping\n")
+  }
+}
+
+# List abstract files
+list.files(data_dir, pattern = "PRJABS.*\\.zip$")
+```
+
 ```{r extract-and-read}
 # Extract and read all CSV files from the ZIP archives
 # Filter for US grants only (Organization Country == "UNITED STATES")
@@ -143,19 +171,7 @@ nih_exporter_list <- nih_exporter_list[!sapply(nih_exporter_list, is.null)]
 
 ```{r combine-datasets}
 # Combine all years into one dataset
-# First check if columns are consistent
-
-# Get column names from each year - step not necessary
-col_names_list <- lapply(nih_exporter_list, names)
-
-# Find common columns across all years - step not necessary
-common_cols <- Reduce(intersect, col_names_list)
-cat("Common columns across all years:", length(common_cols), "\n")
-
-# Combine using only common columns for safety - adapt if you delete steps above
-nih_exporter_all <- bind_rows(
-  lapply(nih_exporter_list, function(df) select(df, all_of(common_cols)))
-)
+nih_exporter_all <- bind_rows(nih_exporter_list)
 
 cat("\nCombined dataset:\n")
 cat("  Total rows:", nrow(nih_exporter_all), "\n")
@@ -175,8 +191,70 @@ print(table(nih_exporter_usa$FISCAL_YEAR))
 # Clean up memory
 rm(nih_exporter_list, nih_exporter_all)
 gc()
+```
 
-# Save checkpoint: ExPORTER 2014-2024 data
+```{r read-abstracts}
+# Read abstract files and join with main data
+# Abstract files contain APPLICATION_ID and ABSTRACT_TEXT
+
+read_abstracts_year <- function(fy, data_dir) {
+  zip_file <- file.path(data_dir, paste0("RePORTER_PRJABS_C_FY", fy, ".zip"))
+
+  if (!file.exists(zip_file)) {
+    cat("Abstract ZIP file for FY", fy, "not found\n")
+    return(NULL)
+  }
+
+  # List contents of ZIP file
+  zip_contents <- unzip(zip_file, list = TRUE)
+  csv_file <- zip_contents$Name[grepl("\\.csv$", zip_contents$Name)]
+
+  if (length(csv_file) == 0) {
+    cat("No CSV found in abstracts FY", fy, "ZIP\n")
+    return(NULL)
+  }
+
+  # Extract to temp location and read
+  temp_dir <- tempdir()
+  unzip(zip_file, files = csv_file, exdir = temp_dir, overwrite = TRUE)
+
+  # Read CSV
+  df <- read_csv(file.path(temp_dir, csv_file), show_col_types = FALSE)
+
+  cat("Abstracts FY", fy, ":", nrow(df), "rows\n")
+  return(df)
+}
+
+# Read all abstract files
+abstracts_list <- lapply(fiscal_years, read_abstracts_year, data_dir = data_dir)
+abstracts_list <- abstracts_list[!sapply(abstracts_list, is.null)]
+
+# Combine all abstracts
+abstracts_all <- bind_rows(abstracts_list)
+cat("\nTotal abstracts:", nrow(abstracts_all), "\n")
+
+# Clean up
+rm(abstracts_list)
+```
+
+```{r join-abstracts}
+# Join abstracts to main ExPORTER data by APPLICATION_ID
+nih_exporter_usa <- nih_exporter_usa %>%
+  left_join(
+    abstracts_all %>% select(APPLICATION_ID, ABSTRACT_TEXT),
+    by = "APPLICATION_ID"
+  )
+
+cat("After joining abstracts:\n")
+cat("  Total rows:", nrow(nih_exporter_usa), "\n")
+cat("  Grants with abstracts:", sum(!is.na(nih_exporter_usa$ABSTRACT_TEXT)), "\n")
+cat("  Grants without abstracts:", sum(is.na(nih_exporter_usa$ABSTRACT_TEXT)), "\n")
+
+# Clean up
+rm(abstracts_all)
+gc()
+
+# Save checkpoint: ExPORTER 2014-2024 data with abstracts
 saveRDS(nih_exporter_usa, here("data/nih_exporter_usa_2014_2024.rds"))
 # To reload: nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2024.rds"))
 ```
@@ -224,7 +302,8 @@ read_manual_2025 <- function(file_path) {
       TOTAL_COST = `Total Cost`,
       STUDY_SECTION_NAME = `Study Section`,
       ACTIVITY = `Activity`,
-      SERIAL_NUMBER = `Serial Number`
+      SERIAL_NUMBER = `Serial Number`,
+      ABSTRACT_TEXT = `Project Abstract`
     )
 
   # Convert date columns from character (m/d/Y format) to Date
@@ -253,6 +332,7 @@ nih_2025_all <- bind_rows(nih_2025_list)
 
 cat("\nManual 2025 data combined:\n")
 cat("  Total rows:", nrow(nih_2025_all), "\n")
+cat("  Total columns:", ncol(nih_2025_all), "\n")
 cat("  Unique grants:", n_distinct(nih_2025_all$CORE_PROJECT_NUM), "\n")
 
 # Clean up
@@ -361,10 +441,11 @@ exporter_cols <- c(
   "ORG_NAME", "ORG_CITY", "ORG_STATE", "ED_INST_TYPE",
   # Project
   "PROJECT_TITLE", "PROJECT_TERMS", "PHR", "NIH_SPENDING_CATS",
+  "ABSTRACT_TEXT",
   # Dates
   "FISCAL_YEAR", "PROJECT_START", "PROJECT_END",
   # Budget
-  "TOTAL_COST", 
+  "TOTAL_COST"
 )
 
 # From Grant Witness (termination-specific only)
