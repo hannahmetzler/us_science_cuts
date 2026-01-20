@@ -380,7 +380,7 @@ cat("  Unique grants:", n_distinct(nih_2025_all$CORE_PROJECT_NUM), "\n")
 rm(nih_2025_list)
 
 # Save checkpoint: 2025 manual download data
-saveRDS(nih_2025_all, here("data/nih_2025_manual.rds"))
+# saveRDS(nih_2025_all, here("data/nih_2025_manual.rds"))
 # To reload: nih_2025_all <- readRDS(here("data/nih_2025_manual.rds"))
 ```
 
