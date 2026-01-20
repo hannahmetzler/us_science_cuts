@@ -51,6 +51,7 @@ library(here)
 
 ExPORTER provides bulk downloads of NIH grant data by fiscal year.
 Source: https://reporter.nih.gov/exporter/
+Abstract files (download-abstracts chunk) - from https://reporter.nih.gov/exporter/abstracts/download/<fy> for 2014-2024
 
 ```{r download-exporter}
 # Download ExPORTER project files for fiscal years 2014-2026
@@ -193,8 +194,8 @@ rm(nih_exporter_list, nih_exporter_all)
 gc()
 ```
 
-```{r read-abstracts}
-# Read abstract files and join with main data
+```{r extract-and-read-abstracts}
+# Unzip and Read abstract files and join with main data
 # Abstract files contain APPLICATION_ID and ABSTRACT_TEXT
 
 read_abstracts_year <- function(fy, data_dir) {
@@ -280,38 +281,78 @@ read_manual_2025 <- function(file_path) {
   # Read skipping the first 7 rows (header metadata)
   df <- read_csv(file_path, skip = 7, show_col_types = FALSE)
 
-  # Rename columns to match ExPORTER bulk download format
+  # Comprehensive rename: map NIH Reporter column names to ExPORTER bulk format
   df <- df %>%
     rename(
+      # IDs
       APPLICATION_ID = `Application ID`,
       FULL_PROJECT_NUM = `Project Number`,
-      IC_NAME = `Administering IC`,  # Note: Reporter uses IC code, not full name
+      SERIAL_NUMBER = `Serial Number`,
+      SUBPROJECT_ID = `Subproject Number`,
+      SUFFIX = `Suffix`,
+      SUPPORT_YEAR = `Support Year`,
+      APPLICATION_TYPE = `Type`,
+      # Agency/Admin
+      ADMINISTERING_IC = `Administering IC`,
+      IC = `IC`,
+      FUNDING_ICs = `Funding IC(s)`,
+      FUNDING_MECHANISM = `Funding Mechanism`,
+      FOA_NUMBER = `Opportunity Number`,
+      PROGRAM_OFFICER_NAME = `Program Official Information`,
+      STUDY_SECTION = `Study Section`,
+      # Activity
+      ACTIVITY = `Activity`,
+      # PI info
+      PI_IDS = `Contact PI Person ID`,
       PI_NAMEs = `Contact PI / Project Leader`,
+      # Organization
       ORG_NAME = `Organization Name`,
       ORG_CITY = `Organization City`,
       ORG_STATE = `Organization State`,
       ORG_COUNTRY = `Organization Country`,
+      ORG_ZIPCODE = `Organization Zip`,
+      ORG_DISTRICT = `Congressional District`,
+      ORG_DEPT = `Department`,
+      ORG_DUNS = `DUNS Number`,
+      ORG_FIPS = `FIPS`,
+      ORG_IPF_CODE = `Organization ID (IPF)`,
       ED_INST_TYPE = `Organization Type`,
+      # Project content
       PROJECT_TITLE = `Project Title`,
       PROJECT_TERMS = `Project Terms`,
       PHR = `Public Health Relevance`,
       NIH_SPENDING_CATS = `NIH Spending Categorization`,
+      ABSTRACT_TEXT = `Project Abstract`,
+      # Dates
       FISCAL_YEAR = `Fiscal Year`,
       PROJECT_START = `Project Start Date`,
       PROJECT_END = `Project End Date`,
+      AWARD_NOTICE_DATE = `Award Notice Date`,
+      BUDGET_START = `Budget Start Date`,
+      BUDGET_END = `Budget End Date`,
+      # Budget
       TOTAL_COST = `Total Cost`,
-      STUDY_SECTION_NAME = `Study Section`,
-      ACTIVITY = `Activity`,
-      SERIAL_NUMBER = `Serial Number`,
-      ABSTRACT_TEXT = `Project Abstract`
+      TOTAL_COST_SUB_PROJECT = `Total Cost(Sub Projects)`,
+      DIRECT_COST_AMT = `Direct Cost IC`,
+      INDIRECT_COST_AMT = `Indirect Cost IC`,
+      # Other
+      ARRA_FUNDED = `ARRA Indicator`,
+      CFDA_CODE = `Assistance Listing Number`
     )
 
   # Convert date columns from character (m/d/Y format) to Date
   df <- df %>%
     mutate(
       PROJECT_START = mdy(PROJECT_START),
-      PROJECT_END = mdy(PROJECT_END)
+      PROJECT_END = mdy(PROJECT_END),
+      BUDGET_START = mdy(BUDGET_START),
+      BUDGET_END = mdy(BUDGET_END),
+      AWARD_NOTICE_DATE = mdy(AWARD_NOTICE_DATE)
     )
+
+  # Ensure SUBPROJECT_ID is character for consistency with ExPORTER
+  df <- df %>%
+    mutate(SUBPROJECT_ID = as.character(SUBPROJECT_ID))
 
   # Extract CORE_PROJECT_NUM from FULL_PROJECT_NUM
   # FULL_PROJECT_NUM format: "3R01FD007630-01S4" -> CORE_PROJECT_NUM: "R01FD007630"
@@ -343,12 +384,17 @@ saveRDS(nih_2025_all, here("data/nih_2025_manual.rds"))
 # To reload: nih_2025_all <- readRDS(here("data/nih_2025_manual.rds"))
 ```
 
-```{r combine-with-exporter}
+```{r combine-manual-with-exporter}
 # Combine 2025 manual data with ExPORTER bulk data (2014-2024)
 # Select common columns for binding
 
+cat("ExPORTER columns:", ncol(nih_exporter_usa), "\n")
+cat("Manual 2025 columns:", ncol(nih_2025_all), "\n")
+
 common_cols_2025 <- intersect(names(nih_exporter_usa), names(nih_2025_all))
 cat("Common columns between ExPORTER and 2025 manual:", length(common_cols_2025), "\n")
+cat("Common columns:\n")
+print(common_cols_2025)
 
 # Add 2025 data to ExPORTER USA data
 nih_exporter_usa <- bind_rows(
@@ -430,22 +476,24 @@ cat("  Columns:", ncol(nih_cut), "\n")
 # Recommended columns from each dataset
 
 # From ExPORTER (authoritative grant data)
+# Using column names that exist in both bulk download AND manual 2025 data
 exporter_cols <- c(
   # IDs
   "APPLICATION_ID", "CORE_PROJECT_NUM", "FULL_PROJECT_NUM",
   # Agency
-  "IC_NAME", "STUDY_SECTION_NAME",
+  "ADMINISTERING_IC", "STUDY_SECTION", "FUNDING_MECHANISM",
   # PI
-  "PI_NAMEs",
+  "PI_IDS", "PI_NAMEs",
   # Organization
-  "ORG_NAME", "ORG_CITY", "ORG_STATE", "ED_INST_TYPE",
+  "ORG_NAME", "ORG_CITY", "ORG_STATE", "ORG_ZIPCODE", "ORG_COUNTRY",
+  "ORG_DISTRICT", "ORG_DEPT", "ED_INST_TYPE",
   # Project
   "PROJECT_TITLE", "PROJECT_TERMS", "PHR", "NIH_SPENDING_CATS",
   "ABSTRACT_TEXT",
   # Dates
   "FISCAL_YEAR", "PROJECT_START", "PROJECT_END",
   # Budget
-  "TOTAL_COST"
+  "TOTAL_COST", "DIRECT_COST_AMT", "INDIRECT_COST_AMT"
 )
 
 # From Grant Witness (termination-specific only)
