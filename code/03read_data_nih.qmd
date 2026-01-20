@@ -396,6 +396,21 @@ cat("Common columns between ExPORTER and 2025 manual:", length(common_cols_2025)
 cat("Common columns:\n")
 print(common_cols_2025)
 
+# Ensure consistent column types before binding
+# Some columns are character in one dataset and numeric in another
+cols_to_character <- c("PI_IDS", "CFDA_CODE", "SUBPROJECT_ID", "SUFFIX",
+                       "SUPPORT_YEAR", "APPLICATION_TYPE", "ORG_DUNS",
+                       "ORG_FIPS", "ORG_ZIPCODE", "ORG_DISTRICT")
+
+for (col in cols_to_character) {
+  if (col %in% names(nih_exporter_usa)) {
+    nih_exporter_usa[[col]] <- as.character(nih_exporter_usa[[col]])
+  }
+  if (col %in% names(nih_2025_all)) {
+    nih_2025_all[[col]] <- as.character(nih_2025_all[[col]])
+  }
+}
+
 # Add 2025 data to ExPORTER USA data
 nih_exporter_usa <- bind_rows(
   nih_exporter_usa,
