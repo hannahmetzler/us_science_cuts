@@ -12,7 +12,7 @@ editor: source
   - FY 2025-2026 not yet available on ExPORTER bulk download
   - Files saved to data_raw/nih_exporter/
 
-  # Join Test Results
+  ## Join Test Results
 
   - 97% match rate: 5,649 of 5,812 cut grants found in ExPORTER
   - 163 unmatched: Likely FY 2025 grants not yet in ExPORTER
@@ -25,7 +25,7 @@ editor: source
   - Agency: ADMINISTERING_IC, IC_NAME
   - PI: PI_IDS, PI_NAMEs
   - Org: ORG_NAME, ORG_CITY, ORG_STATE
-  - Project: PROJECT_TITLE, PROJECT_TERMS, PHR, NIH_SPENDING_CATS
+  - Project: PROJECT_TITLE, PROJECT_TERMS, PHR (Public Health Relevance), NIH_SPENDING_CATS, ABSTRACT_TEXT
   - Dates: FY, PROJECT_START, PROJECT_END
   - Budget: TOTAL_COST, DIRECT_COST_AMT, INDIRECT_COST_AMT
   - Metadata: ACTIVITY, FUNDING_MECHANISM, STUDY_SECTION
@@ -39,6 +39,7 @@ editor: source
   - Political: org_congdist, us_rep
   - URLs: usaspending_url, reporter_url
 
+# CODE
 
 ```{r}
 # Packages
@@ -384,7 +385,7 @@ rm(nih_2025_list)
 # To reload: nih_2025_all <- readRDS(here("data/nih_2025_manual.rds"))
 ```
 
-## COMBINE NIH Exporter DATA from 2014-2024 with 2025 data
+## Combine NIH Exporter data from 2014-2024 with 2025 data
 
 ```{r combine-manual-with-exporter}
 # Combine 2025 manual data with ExPORTER bulk data (2014-2024)
