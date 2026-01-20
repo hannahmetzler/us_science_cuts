@@ -384,6 +384,8 @@ rm(nih_2025_list)
 # To reload: nih_2025_all <- readRDS(here("data/nih_2025_manual.rds"))
 ```
 
+## COMBINE NIH Exporter DATA from 2014-2024 with 2025 data
+
 ```{r combine-manual-with-exporter}
 # Combine 2025 manual data with ExPORTER bulk data (2014-2024)
 # Select common columns for binding
@@ -400,7 +402,7 @@ print(common_cols_2025)
 # Some columns are character in one dataset and numeric in another
 cols_to_character <- c("PI_IDS", "CFDA_CODE", "SUBPROJECT_ID", "SUFFIX",
                        "SUPPORT_YEAR", "APPLICATION_TYPE", "ORG_DUNS",
-                       "ORG_FIPS", "ORG_ZIPCODE", "ORG_DISTRICT")
+                       "ORG_FIPS", "ORG_ZIPCODE", "ORG_DISTRICT", "SERIAL_NUMBER")
 
 for (col in cols_to_character) {
   if (col %in% names(nih_exporter_usa)) {
@@ -417,17 +419,20 @@ nih_exporter_usa <- bind_rows(
   nih_2025_all %>% select(all_of(common_cols_2025))
 )
 
+# Convert all column names to lowercase for easier typing
+names(nih_exporter_usa) <- tolower(names(nih_exporter_usa))
+
 cat("\nCombined ExPORTER + 2025 manual data:\n")
 cat("  Total rows:", nrow(nih_exporter_usa), "\n")
 cat("\nGrants per fiscal year (including 2025):\n")
-print(table(nih_exporter_usa$FISCAL_YEAR))
+print(table(nih_exporter_usa$fiscal_year))
 
 # Clean up
 rm(nih_2025_all)
 gc()
 
 # Save checkpoint: Combined ExPORTER 2014-2024 + 2025 manual data
-saveRDS(nih_exporter_usa, here("data/nih_exporter_usa_2014_2025.rds"))
+# saveRDS(nih_exporter_usa, here("data/nih_exporter_usa_2014_2025.rds"))
 # To reload: nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2025.rds"))
 ```
 
@@ -444,7 +449,7 @@ cat("  Columns:", ncol(nih_cut), "\n")
 
 ## Column Analysis and Recommendations
 
-### ExPORTER Columns (46 columns) - Authoritative source for all grants
+### ExPORTER Columns (48 columns) - Authoritative source for all grants
 
 **Identifiers:**
 - APPLICATION_ID, CORE_PROJECT_NUM (join key), FULL_PROJECT_NUM
@@ -494,21 +499,21 @@ cat("  Columns:", ncol(nih_cut), "\n")
 # Using column names that exist in both bulk download AND manual 2025 data
 exporter_cols <- c(
   # IDs
-  "APPLICATION_ID", "CORE_PROJECT_NUM", "FULL_PROJECT_NUM",
+  "application_id", "core_project_num", "full_project_num",
   # Agency
-  "ADMINISTERING_IC", "STUDY_SECTION", "FUNDING_MECHANISM",
+  "administering_ic", "study_section", "funding_mechanism",
   # PI
-  "PI_IDS", "PI_NAMEs",
+  "pi_ids", "pi_names",
   # Organization
-  "ORG_NAME", "ORG_CITY", "ORG_STATE", "ORG_ZIPCODE", "ORG_COUNTRY",
-  "ORG_DISTRICT", "ORG_DEPT", "ED_INST_TYPE",
+  "org_name", "org_city", "org_state", "org_zipcode", "org_country",
+  "org_district", "org_dept", "ed_inst_type",
   # Project
-  "PROJECT_TITLE", "PROJECT_TERMS", "PHR", "NIH_SPENDING_CATS",
-  "ABSTRACT_TEXT",
+  "project_title", "project_terms", "phr", "nih_spending_cats",
+  "abstract_text",
   # Dates
-  "FISCAL_YEAR", "PROJECT_START", "PROJECT_END",
+  "fiscal_year", "project_start", "project_end",
   # Budget
-  "TOTAL_COST", "DIRECT_COST_AMT", "INDIRECT_COST_AMT"
+  "total_cost", "direct_cost_amt", "indirect_cost_amt"
 )
 
 # From Grant Witness (termination-specific only)
@@ -544,10 +549,10 @@ Join on CORE_PROJECT_NUM (ExPORTER) = core_award_number (Grant Witness)
 ```{r test-join}
 # Join statistics
 matched <- nih_cut %>%
-  semi_join(nih_exporter_usa, by = c("core_award_number" = "CORE_PROJECT_NUM"))
+  semi_join(nih_exporter_usa, by = c("core_award_number" = "core_project_num"))
 
 unmatched <- nih_cut %>%
-  anti_join(nih_exporter_usa, by = c("core_award_number" = "CORE_PROJECT_NUM"))
+  anti_join(nih_exporter_usa, by = c("core_award_number" = "core_project_num"))
 
 cat("Join results:\n")
 cat("  Total cut grants:", nrow(nih_cut), "\n")
@@ -563,8 +568,8 @@ Add termination info from Grant Witness where available.
 ```{r create-joined-dataset}
 # Get most recent ExPORTER record per grant
 nih_exporter_latest <- nih_exporter_usa %>%
-  group_by(CORE_PROJECT_NUM) %>%
-  filter(FY == max(FY)) %>%
+  group_by(core_project_num) %>%
+  filter(fiscal_year == max(fiscal_year)) %>%
   slice(1) %>%  # In case of ties, take first
   ungroup()
 
@@ -577,7 +582,7 @@ nih_cut_slim <- nih_cut %>%
 # Join: all grants from ExPORTER, add termination info where available
 nih_joined <- nih_exporter_latest %>%
   select(all_of(exporter_cols)) %>%
-  left_join(nih_cut_slim, by = c("CORE_PROJECT_NUM" = "core_award_number")) %>%
+  left_join(nih_cut_slim, by = c("core_project_num" = "core_award_number")) %>%
   mutate(was_cut = !is.na(status))
 
 cat("\nJoined dataset:\n")
@@ -592,7 +597,7 @@ glimpse(nih_joined)
 ```{r check-lost-grants}
 # Which cut grants were lost in the join (not in ExPORTER)?
 lost_cuts <- nih_cut %>%
-  anti_join(nih_exporter_usa, by = c("core_award_number" = "CORE_PROJECT_NUM"))
+  anti_join(nih_exporter_usa, by = c("core_award_number" = "core_project_num"))
 
 cat("Cut grants not found in ExPORTER:", nrow(lost_cuts), "\n")
 cat("These are likely FY 2025 grants not yet in ExPORTER bulk download.\n")
