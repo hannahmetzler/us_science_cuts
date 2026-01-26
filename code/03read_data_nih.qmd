@@ -46,6 +46,15 @@ editor: source
 library(tidyverse)
 library(lubridate)  # for date parsing (mdy)
 library(here)
+
+# Settings for this script
+fiscal_years <- 2014:2024 # (2025 and 2026 don't exist as bulk download)
+data_dir <- here("data_raw/nih_exporter")
+
+# Create directory if it doesn't exist
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
 ```
 
 ## Download NIH ExPORTER data
@@ -58,14 +67,6 @@ Abstract files (download-abstracts chunk) - from https://reporter.nih.gov/export
 # Download ExPORTER project files for fiscal years 2014-2026
 # Files are ZIP archives containing CSV data
 # URL format: https://reporter.nih.gov/exporter/projects/download/<fy>
-
-fiscal_years <- 2014:2024 # (2025 and 2026 don't exist as bulk download)
-data_dir <- here("data_raw/nih_exporter")
-
-# Create directory if it doesn't exist
-if (!dir.exists(data_dir)) {
-  dir.create(data_dir, recursive = TRUE)
-}
 
 # Download each fiscal year (skip if already downloaded)
 for (fy in fiscal_years) {
@@ -121,6 +122,9 @@ for (fy in fiscal_years) {
 # List abstract files
 list.files(data_dir, pattern = "PRJABS.*\\.zip$")
 ```
+
+
+## Extract, read and join bulk download EXPORTER datasets
 
 ```{r extract-and-read}
 # Extract and read all CSV files from the ZIP archives
@@ -258,7 +262,8 @@ gc()
 
 # Save checkpoint: ExPORTER 2014-2024 data with abstracts
 saveRDS(nih_exporter_usa, here("data/nih_exporter_usa_2014_2024.rds"))
-# To reload: nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2024.rds"))
+# To reload: 
+#nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2024.rds"))
 ```
 
 ## Read manually downloaded 2025 NIH Reporter data
@@ -381,8 +386,9 @@ cat("  Unique grants:", n_distinct(nih_2025_all$CORE_PROJECT_NUM), "\n")
 rm(nih_2025_list)
 
 # Save checkpoint: 2025 manual download data
-# saveRDS(nih_2025_all, here("data/nih_2025_manual.rds"))
-# To reload: nih_2025_all <- readRDS(here("data/nih_2025_manual.rds"))
+saveRDS(nih_2025_all, here("data/nih_2025_manual.rds"))
+# To reload: 
+# nih_2025_all <- readRDS(here("data/nih_2025_manual.rds"))
 ```
 
 ## Combine NIH Exporter data from 2014-2024 with 2025 data
@@ -434,7 +440,8 @@ gc()
 
 # Save checkpoint: Combined ExPORTER 2014-2024 + 2025 manual data
 # saveRDS(nih_exporter_usa, here("data/nih_exporter_usa_2014_2025.rds"))
-# To reload: nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2025.rds"))
+# To reload: 
+nih_exporter_usa <- readRDS(here("data/nih_exporter_usa_2014_2025.rds"))
 ```
 
 ## Read Grant Witness NIH terminations
