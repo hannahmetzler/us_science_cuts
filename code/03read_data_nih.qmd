@@ -47,6 +47,9 @@ library(tidyverse)
 library(lubridate)  # for date parsing (mdy)
 library(here)
 
+# To load the end product of this script, load nih_joined here:
+# nih_joined <- readRDS(here('data_analysis/nih_analysis.rds'))
+
 # Settings for this script
 fiscal_years <- 2014:2024 # (2025 and 2026 don't exist as bulk download)
 data_dir <- here("data_raw/nih_exporter")
@@ -438,9 +441,9 @@ rm(nih_2025_list)
 } # end skip_2025_processing check
 ```
 
-## Combine NIH Exporter data from 2014-2024 with 2025 data
+## Combine NIH Exporter data from 2014-2024 with 2025 data - load nih_exporter_usa data from cache
 
-```{r combine-manual-with-exporter}
+```{r combine-manual-with-exporter-load_nih_exporter_usa}
 # Combine 2025 manual data with ExPORTER bulk data (2014-2024)
 # Or load from cache if available
 
@@ -676,8 +679,9 @@ if (nrow(lost_cuts) > 0) {
 ```{r save-analysis-dataset}
 # Save joined dataset
 write_csv(nih_joined, here('data_analysis/nih_analysis.csv'))
+saveRDS(nih_joined, here('data_analysis/nih_analysis.rds'))
 cat("NIH analysis dataset:", nrow(nih_joined), "grants,", ncol(nih_joined), "columns\n")
-cat("Saved to data_analysis/nih_analysis.csv\n")
+cat("Saved to data_analysis/nih_analysis.csv and .rds\n")
 ```
 
 
