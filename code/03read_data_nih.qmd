@@ -36,8 +36,7 @@ Delete cache files to force reprocessing.
 ## Output Files
 
 - `data_analysis/nih_analysis.csv`: CSV format for broad compatibility
-- `data_analysis/nih_analysis.rds`: RDS format preserving R data types
-- `data_analysis/nih_analysis.parquet`: Parquet format for Python compatibility
+- `data_analysis/nih_analysis.parquet`: Parquet format for Python compatibility (and faster R loading)
 
 ## Dataset Statistics
 
@@ -82,9 +81,10 @@ Delete cache files to force reprocessing.
 library(tidyverse)
 library(lubridate)  # for date parsing (mdy)
 library(here)
+library(arrow) # for writing data to .parquet format for python
 
-# To load the end product of this script, load nih_joined here:
-nih_joined <- readRDS(here('data_analysis/nih_analysis.rds'))
+# To load the end product of this script, load nih_joined here (also possible to load from .csv)
+nih_joined <- arrow::read_parquet(here('data_analysis/nih_analysis.parquet'))
 
 # Settings for this script
 fiscal_years <- 2014:2024 # (2025 and 2026 don't exist as bulk download)
@@ -98,7 +98,7 @@ if (!dir.exists(data_dir)) {
 
 ## Load cached data
 
-Load the most complete cached dataset available. This makes `nih_exporter_usa` available for inspection even if you don't want to reprocess everything.
+Load the most complete cached dataset available. This makes `nih_exporter_usa` available for inspection even if you don't want to reprocess everything. For later runs of this script, once data has been downloaded and processed a first time. 
 
 ```{r load-cache}
 # Define cache file paths
@@ -131,9 +131,9 @@ cat("  skip_2025_processing:", skip_2025_processing, "\n")
 
 ## Download NIH ExPORTER data
 
-ExPORTER provides bulk downloads of NIH grant data by fiscal year.
-Source: https://reporter.nih.gov/exporter/
-Abstract files (download-abstracts chunk) - from https://reporter.nih.gov/exporter/abstracts/download/<fy> for 2014-2024
+- ExPORTER provides bulk downloads of NIH grant data by fiscal year.
+ -Source: https://reporter.nih.gov/exporter/
+- Abstract files (download-abstracts chunk) - from https://reporter.nih.gov/exporter/abstracts/download/<fy> for 2014-2024
 
 ```{r download-exporter}
 # Download ExPORTER project files for fiscal years 2014-2026
@@ -744,10 +744,9 @@ if (nrow(lost_cuts) > 0) {
 ```{r save-analysis-dataset}
 # Save joined dataset
 write_csv(nih_joined, here('data_analysis/nih_analysis.csv'))
-saveRDS(nih_joined, here('data_analysis/nih_analysis.rds'))
 arrow::write_parquet(nih_joined, here('data_analysis/nih_analysis.parquet'))
 cat("NIH analysis dataset:", nrow(nih_joined), "grants,", ncol(nih_joined), "columns\n")
-cat("Saved to data_analysis/nih_analysis.csv, .rds, and .parquet\n")
+cat("Saved to data_analysis/nih_analysis.csv and .parquet\n")
 ```
 
 
