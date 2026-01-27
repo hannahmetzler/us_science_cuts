@@ -1,4 +1,4 @@
-# us_science_cuts
+# US Science Cuts 
 
 Analysis of the cuts of science grants in the US 2025
 
@@ -6,10 +6,17 @@ Analysis of the cuts of science grants in the US 2025
 
 After cloning the repository, add the following folders in the root directory:  
 
-- data_raw
-- data
-- data_analysis
+- data_raw: Json files, or .zip files downloaded in bulk
+- data: data in a format where they can be loaded into R/Python. Grant witness data is directly saved here. 
+- data_analysis: data with selected columns relevant for statistical analysis, or for sending emails to PIs of NSF projects. 
 
+## Scripts
+
+Execute code in the order of numbered scripts in the code/ folder. 
+
+These scripts are only drafts, not working and not finished: 
+- 04fetch_doge_grants.sh. Purpose: get the DOGE API running to see if there is more data on cut grants there, not yet included in the sources below. 
+- 05read_hhs_pdf_data.R: maybe not required. Most HHS data is about NIH. But this includes some other smaller agencies. Check if these are included in the NIH dataset from grant witness. 
 
 ## Data
 
@@ -29,23 +36,16 @@ Data files are not included in this repository due to size. To obtain the requir
       - `data/grant_witness_nih_terminations.csv` 
       - `data/grant_witness_epa_terminations.csv`
 
+3. **NIH All Grants (2014-2025)**
+
+   - Source: https://reporter.nih.gov/ and https://reporter.nih.gov/exporter
+   - Download is performed by the script 03read_data_nih.qmd on first run.
+
 ### Optional files (used to check data in the scripts)
 
 - `data/cossa_NSF-Terminated-Awards.csv` - from https://cossa.org/nsf-releases-list-of-terminated-grants/
-- HHS'_Grants_Terminated.pdf: official list of terminated HHS awards https://taggs.hhs.gov/Content/Data/HHS_Grants_Terminated.pdf
-
-
-## Preparing datasets: 
-
-Execute code in the order of numbered scripts in the code/ folder. 
-
-- 04fetch_doge_grants.sh: Not finished, not working
-- 05read_hhs_pdf_data.R: Not finished, not working, maybe not required
-
-### Output files: data_analysis
-
-- `data_analysis/nsf_analysis.csv` - All NSF grants with termination status (one row per grant, cut grants first)
-- `data_analysis/nsf_one_line_per_email.csv` - Same data expanded to one row per email (for survey/analysis)
+- `data_raw/HHS_Grants_Terminated.pdf`: official list of terminated HHS awards https://taggs.hhs.gov/Content/Data/HHS_Grants_Terminated.pdf
+   - grant witness data includes this as one of its sources
 
 ## NSF Data
 
@@ -139,3 +139,5 @@ Only grants to US institutions (country code USA in NIH ExPORTER).
 
 - `data_analysis/nih_analysis.csv` - CSV format for broad compatibility
 - `data_analysis/nih_analysis.rds` - RDS format preserving R data types
+
+
