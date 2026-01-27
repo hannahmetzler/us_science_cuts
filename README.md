@@ -8,7 +8,11 @@ After cloning the repository, add the following folders in the root directory:
 
 - data_raw: Json files, or .zip files downloaded in bulk
 - data: data in a format where they can be loaded into R/Python. Grant witness data is directly saved here. 
-- data_analysis: data with selected columns relevant for statistical analysis, or for sending emails to PIs of NSF projects. 
+- data_analysis: data with selected columns relevant for statistical analysis, or for sending emails to PIs of NSF projects.
+   - files are saved as .csv and .parquet. Parquet is a format readable for both Python and R without losing column formatting. To read into python use: 
+
+import pandas as pd
+df = pd.read_parquet("file.parquet")
 
 ## Scripts
 
@@ -20,9 +24,14 @@ These scripts are only drafts, not working and not finished:
 
 ## Data
 
-Data files are not included in this repository due to size. To obtain the required data:
+Data files are not included in this repository due to size. 
 
-### Required files
+To obtain the required data for analysis: use the nextcloud link with the password given in the google with project notes
+Link: https://nextcloud.csh.ac.at/index.php/s/AxQkmJmr6yJYGEA
+
+To obtain the required raw data:
+
+### Required raw files
 
 1. **NSF All Grants (2014-2026)**
    - Source: https://www.nsf.gov/awardsearch/download-awards
@@ -92,8 +101,7 @@ https://www.nsf.gov/awardsearch/showAward?AWD_ID=2425253
 ### Output Files
 
 - `data_analysis/nsf_analysis.csv` - CSV format for broad compatibility
-- `data_analysis/nsf_analysis.rds` - RDS format preserving R data types
-- `data_analysis/nsf_analysis.parquet` - Parquet format for Python compatibility
+- `data_analysis/nsf_analysis.parquet` - Parquet format (Python and R compatible)
 - `data_analysis/nsf_emails.csv` - Same data expanded to one row per PI email
 
 ## NIH Data
@@ -140,7 +148,4 @@ Only grants to US institutions (country code USA in NIH ExPORTER).
 ### Output Files
 
 - `data_analysis/nih_analysis.csv` - CSV format for broad compatibility
-- `data_analysis/nih_analysis.rds` - RDS format preserving R data types
-- `data_analysis/nih_analysis.parquet` - Parquet format for Python compatibility
-
-
+- `data_analysis/nih_analysis.parquet` - Parquet format (Python and R compatible)
