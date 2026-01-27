@@ -51,6 +51,9 @@ Execute code in the order of numbered scripts in the code/ folder.
 
 All NSF grants 2014-2026, joined with Grant Witness termination data.
 
+TIP: Check the award pages on NSF website to understand what the column names describe. For example:
+https://www.nsf.gov/awardsearch/showAward?AWD_ID=2425253
+
 ### Dataset Statistics
 
 | Metric         | Count   |
