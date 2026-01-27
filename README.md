@@ -22,7 +22,7 @@ After cloning the repository, add the following folders in the root directory:
       # R
       df <- arrow::read_parquet("file.parquet")
       ```
-- add an additional folder for figures
+- add an additional folder for figures before you create any
 
 ## R Dependencies
 
@@ -37,6 +37,8 @@ Required R packages:
 
 Execute code in the order of numbered scripts in the code/ folder. 
 
+01-03 are for downloading and reading/preparing NSF and NIH data. 
+
 These scripts are only drafts, not working and not finished: 
 - 04fetch_doge_grants.sh. Purpose: get the DOGE API running to see if there is more data on cut grants there, not yet included in the sources below. 
 - 05read_hhs_pdf_data.R: maybe not required. Most HHS data is about NIH. But this includes some other smaller agencies. Check if these are included in the NIH dataset from grant witness. 
@@ -48,9 +50,9 @@ Data files are not included in this repository due to size.
 To obtain the required data for analysis: use the nextcloud link with the password given in the google with project notes
 Link: https://nextcloud.csh.ac.at/index.php/s/AxQkmJmr6yJYGEA
 
-To obtain the required raw data:
+To obtain the raw data:
 
-### Required raw files
+### Required raw data files
 
 1. **NSF All Grants (2014-2026)**
    - Source: https://www.nsf.gov/awardsearch/download-awards
