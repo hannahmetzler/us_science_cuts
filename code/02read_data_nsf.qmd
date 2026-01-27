@@ -33,6 +33,7 @@ This script processes and joins NSF grant data from multiple sources to create a
 
 - `data_analysis/nsf_analysis.csv`: CSV format for broad compatibility
 - `data_analysis/nsf_analysis.rds`: RDS format preserving R data types
+- `data_analysis/nsf_analysis.parquet`: Parquet format for Python compatibility
 - `data_analysis/nsf_emails.csv`: One row per PI email
 
 ## Dataset Statistics
@@ -248,8 +249,9 @@ nsf_analysis <- nsf_joined %>%
 
 write_csv(nsf_analysis, here('data_analysis/nsf_analysis.csv'))
 saveRDS(nsf_analysis, here('data_analysis/nsf_analysis.rds'))
+arrow::write_parquet(nsf_analysis, here('data_analysis/nsf_analysis.parquet'))
 cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
-cat("Saved to data_analysis/nsf_analysis.csv and .rds\n")
+cat("Saved to data_analysis/nsf_analysis.csv, .rds, and .parquet\n")
 glimpse(nsf_analysis)
 ```
 

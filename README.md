@@ -2,18 +2,9 @@
 
 Analysis of the cuts of science grants in the US 2025
 
-## To Do: 
+## To Do:
 
-- Add to the 02 and 03 scripts, at the end: save the analysis datasets in a dataformat compatible with python: Parquet is the best option:
-
-      In R:
-      arrow::write_parquet(df, "file.parquet")
-      In Python:
-
-      import pandas as pd
-      df = pd.read_parquet("file.parquet")
-
-- check the study_section and study_section name columns in nih_joined dataframe. Something got messed up. Sometimes the study_section column contains the study section name, the study_section_name column then says NA. But the code for study_section gets lost in this way. 
+- check the study_section and study_section name columns in nih_joined dataframe. Something got messed up. Sometimes the study_section column contains the study section name, the study_section_name column then says NA. But the code for study_section gets lost in this way.
 
 ## Folder structure 
 
@@ -104,7 +95,9 @@ https://www.nsf.gov/awardsearch/showAward?AWD_ID=2425253
 
 ### Output Files
 
-- `data_analysis/nsf_analysis.csv` - All NSF grants with termination status
+- `data_analysis/nsf_analysis.csv` - CSV format for broad compatibility
+- `data_analysis/nsf_analysis.rds` - RDS format preserving R data types
+- `data_analysis/nsf_analysis.parquet` - Parquet format for Python compatibility
 - `data_analysis/nsf_emails.csv` - Same data expanded to one row per PI email
 
 ## NIH Data
@@ -152,5 +145,6 @@ Only grants to US institutions (country code USA in NIH ExPORTER).
 
 - `data_analysis/nih_analysis.csv` - CSV format for broad compatibility
 - `data_analysis/nih_analysis.rds` - RDS format preserving R data types
+- `data_analysis/nih_analysis.parquet` - Parquet format for Python compatibility
 
 

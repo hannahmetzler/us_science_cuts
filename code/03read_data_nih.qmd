@@ -37,6 +37,7 @@ Delete cache files to force reprocessing.
 
 - `data_analysis/nih_analysis.csv`: CSV format for broad compatibility
 - `data_analysis/nih_analysis.rds`: RDS format preserving R data types
+- `data_analysis/nih_analysis.parquet`: Parquet format for Python compatibility
 
 ## Dataset Statistics
 
@@ -734,8 +735,9 @@ if (nrow(lost_cuts) > 0) {
 # Save joined dataset
 write_csv(nih_joined, here('data_analysis/nih_analysis.csv'))
 saveRDS(nih_joined, here('data_analysis/nih_analysis.rds'))
+arrow::write_parquet(nih_joined, here('data_analysis/nih_analysis.parquet'))
 cat("NIH analysis dataset:", nrow(nih_joined), "grants,", ncol(nih_joined), "columns\n")
-cat("Saved to data_analysis/nih_analysis.csv and .rds\n")
+cat("Saved to data_analysis/nih_analysis.csv, .rds, and .parquet\n")
 ```
 
 
