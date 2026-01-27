@@ -395,7 +395,7 @@ read_manual_2025 <- function(file_path) {
       FUNDING_MECHANISM = `Funding Mechanism`,
       FOA_NUMBER = `Opportunity Number`,
       PROGRAM_OFFICER_NAME = `Program Official Information`,
-      STUDY_SECTION = `Study Section`,
+      STUDY_SECTION_NAME = `Study Section`,  # 2025 manual download has name, not code
       # Activity
       ACTIVITY = `Activity`,
       # PI info
