@@ -8,6 +8,7 @@ editor: source
 # Packages
 library(tidyverse)
 library(here)
+library(arrow)
 ```
 
 # Summary of script and output datafile structure
@@ -32,8 +33,7 @@ This script processes and joins NSF grant data from multiple sources to create a
 ## Output Files
 
 - `data_analysis/nsf_analysis.csv`: CSV format for broad compatibility
-- `data_analysis/nsf_analysis.rds`: RDS format preserving R data types
-- `data_analysis/nsf_analysis.parquet`: Parquet format for Python compatibility
+- `data_analysis/nsf_analysis.parquet`: Parquet format (Python and R compatible)
 - `data_analysis/nsf_emails.csv`: One row per PI email
 
 ## Dataset Statistics
@@ -76,10 +76,16 @@ This script processes and joins NSF grant data from multiple sources to create a
 ## Load final analysis dataset
 
 ```{r load-analysis-dataset}
-# Load the final analysis dataset (run the code below only if you need to regenerate it)
-nsf_analysis <- readRDS(here('data_analysis/nsf_analysis.rds'))
-cat("Loaded NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
-glimpse(nsf_analysis)
+# Load the final analysis dataset if it exists (run the code below only if you need to regenerate it)
+parquet_file <- here('data_analysis/nsf_analysis.parquet')
+
+if (file.exists(parquet_file)) {
+  nsf_analysis <- arrow::read_parquet(parquet_file)
+  cat("Loaded NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
+  glimpse(nsf_analysis)
+} else {
+  cat("No cached data found. Run the sections below to create nsf_analysis.\n")
+}
 ``` 
 
 # Read in and join NSF Data (Sources: NSF and Grant Witness)
@@ -248,10 +254,10 @@ nsf_analysis <- nsf_joined %>%
   arrange(desc(was_cut), grant_id)  # cut grants first
 
 write_csv(nsf_analysis, here('data_analysis/nsf_analysis.csv'))
-saveRDS(nsf_analysis, here('data_analysis/nsf_analysis.rds'))
+
 arrow::write_parquet(nsf_analysis, here('data_analysis/nsf_analysis.parquet'))
 cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
-cat("Saved to data_analysis/nsf_analysis.csv, .rds, and .parquet\n")
+cat("Saved to data_analysis/nsf_analysis.csv and .parquet\n")
 glimpse(nsf_analysis)
 ```
 
