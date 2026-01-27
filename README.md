@@ -93,6 +93,9 @@ All NSF grants 2014-2026, joined with Grant Witness termination data.
 
 ## NIH Data
 
+TIP: Check the project pages on NIH website to understand what the column names describe. For example: 
+https://reporter.nih.gov/project-details/10129786
+
 Only grants to US institutions (country code USA in NIH ExPORTER).
 
 ### Dataset Statistics

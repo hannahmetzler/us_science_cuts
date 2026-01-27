@@ -10,6 +10,76 @@ library(tidyverse)
 library(here)
 ```
 
+# Summary of script and output datafile structure
+
+This script processes and joins NSF grant data from multiple sources to create an analysis dataset of NSF grants with termination information.
+
+## Data Sources
+
+- **NSF Award Search** (bulk download): All grants 2014-2026, downloaded as JSON files and converted to TSV
+- **Grant Witness**: Termination/suspension status for affected grants
+
+## Processing Steps
+
+1. Read NSF grant data from TSV files (2014-2019 and 2020-2026)
+2. Select and combine relevant columns
+3. Read Grant Witness termination data
+4. Join datasets on grant_id
+5. Create analysis dataset with renamed columns
+6. Save analysis dataset
+7. Create email-level dataset (one row per PI email)
+
+## Output Files
+
+- `data_analysis/nsf_analysis.csv`: CSV format for broad compatibility
+- `data_analysis/nsf_analysis.rds`: RDS format preserving R data types
+- `data_analysis/nsf_emails.csv`: One row per PI email
+
+## Dataset Statistics
+
+| Metric         | Count   |
+|----------------|---------|
+| Total rows     | ~350,000 |
+| Total columns  | 26      |
+| Cut grants     | ~1,600   |
+| Non-cut grants | ~348,000 |
+| Years          | 2014-2026 |
+
+## Column Structure (26 columns)
+
+**From NSF (12 columns)** - authoritative grant data:
+
+- IDs: grant_id, agcy_id
+- PI: pi_names, pi_emails
+- Project: title, abstract
+- Dates: start_date, end_date
+- Budget: total_budget, amount_awarded
+- Organization: org_name, org_state
+
+**From Grant Witness (13 columns)** - termination-specific:
+
+- Status: terminated, suspended, termination_date
+- Reinstatement: reinstated, reinstatement_date
+- Agency info: award_type, division, directorate, nsf_program_name
+- Spending: usasp_outlaid, estimated_remaining, post_termination_deobligation
+- URLs: nsf_url, usaspending_url
+
+**Derived (1 column):**
+
+- was_cut: TRUE/FALSE flag indicating if grant was terminated
+
+**Note:** Cut grants have `was_cut == TRUE`. Use `was_cut` or `!is.na(terminated)` to filter.
+
+# CODE
+
+## Load final analysis dataset
+
+```{r load-analysis-dataset}
+# Load the final analysis dataset (run the code below only if you need to regenerate it)
+nsf_analysis <- readRDS(here('data_analysis/nsf_analysis.rds'))
+cat("Loaded NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
+glimpse(nsf_analysis)
+``` 
 
 # Read in and join NSF Data (Sources: NSF and Grant Witness)
 
@@ -177,7 +247,9 @@ nsf_analysis <- nsf_joined %>%
   arrange(desc(was_cut), grant_id)  # cut grants first
 
 write_csv(nsf_analysis, here('data_analysis/nsf_analysis.csv'))
+saveRDS(nsf_analysis, here('data_analysis/nsf_analysis.rds'))
 cat("NSF analysis dataset:", nrow(nsf_analysis), "grants,", ncol(nsf_analysis), "columns\n")
+cat("Saved to data_analysis/nsf_analysis.csv and .rds\n")
 glimpse(nsf_analysis)
 ```
 
