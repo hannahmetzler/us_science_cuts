@@ -84,7 +84,7 @@ library(lubridate)  # for date parsing (mdy)
 library(here)
 
 # To load the end product of this script, load nih_joined here:
-# nih_joined <- readRDS(here('data_analysis/nih_analysis.rds'))
+nih_joined <- readRDS(here('data_analysis/nih_analysis.rds'))
 
 # Settings for this script
 fiscal_years <- 2014:2024 # (2025 and 2026 don't exist as bulk download)
@@ -94,6 +94,39 @@ data_dir <- here("data_raw/nih_exporter")
 if (!dir.exists(data_dir)) {
   dir.create(data_dir, recursive = TRUE)
 }
+```
+
+## Load cached data
+
+Load the most complete cached dataset available. This makes `nih_exporter_usa` available for inspection even if you don't want to reprocess everything.
+
+```{r load-cache}
+# Define cache file paths
+exporter_cache <- here("data/nih_exporter_usa_2014_2024.rds")
+combined_cache <- here("data/nih_exporter_usa_2014_2025.rds")
+
+# Check what caches exist and load the most complete one
+if (file.exists(combined_cache)) {
+  nih_exporter_usa <- readRDS(combined_cache)
+  cat("Loaded combined 2014-2025 cache:", nrow(nih_exporter_usa), "rows\n")
+  cache_status <- "combined"
+} else if (file.exists(exporter_cache)) {
+  nih_exporter_usa <- readRDS(exporter_cache)
+  cat("Loaded 2014-2024 cache:", nrow(nih_exporter_usa), "rows\n")
+  cat("(2025 data not yet merged - run sections below to add it)\n")
+  cache_status <- "exporter_only"
+} else {
+  cat("No cache found. Run all sections below to create data.\n")
+  cache_status <- "none"
+}
+
+# Set processing flags based on cache status
+skip_exporter_processing <- cache_status %in% c("exporter_only", "combined")
+skip_2025_processing <- cache_status == "combined"
+
+cat("\nProcessing flags:\n")
+cat("  skip_exporter_processing:", skip_exporter_processing, "\n")
+cat("  skip_2025_processing:", skip_2025_processing, "\n")
 ```
 
 ## Download NIH ExPORTER data
@@ -168,27 +201,10 @@ list.files(data_dir, pattern = "PRJABS.*\\.zip$")
 ```{r extract-and-read}
 # Extract and read all CSV files from the ZIP archives
 # Filter for US grants only (Organization Country == "UNITED STATES")
-# Skip if cached RDS file already exists
+# Skip if cache was loaded in load-cache section above
 
-# Define cache file paths
-exporter_cache <- here("data/nih_exporter_usa_2014_2024.rds")
-combined_cache <- here("data/nih_exporter_usa_2014_2025.rds")
-
-# Check for most complete cache first (combined 2014-2025)
-# If it exists, skip ALL processing and load it directly later
-skip_all_processing <- file.exists(combined_cache)
-
-if (skip_all_processing) {
-  cat("Combined 2014-2025 cache found at:", combined_cache, "\n")
-  cat("Skipping all data processing. Delete cache file to reprocess.\n")
-  skip_exporter_processing <- TRUE
-} else if (file.exists(exporter_cache)) {
-  cat("Cached ExPORTER 2014-2024 data found at:", exporter_cache, "\n")
-  cat("Skipping ZIP extraction. Delete cache file to reprocess.\n")
-  skip_exporter_processing <- TRUE
-} else {
-  cat("No cache found, extracting and reading ExPORTER ZIP files...\n")
-  skip_exporter_processing <- FALSE
+if (skip_exporter_processing) {
+  cat("Using cached data (loaded above). Delete cache files to reprocess.\n")
 }
 
 read_exporter_year <- function(fy, data_dir) {
@@ -315,17 +331,14 @@ read_abstracts_year <- function(fy, data_dir) {
 
 ```{r join-abstracts}
 # Join abstracts to main ExPORTER data by APPLICATION_ID
-# Or load from cache if available
+# Data was already loaded in load-cache section if cache exists
 
-if (skip_all_processing) {
-  # Skip - will load combined cache later
-  cat("Skipping 2014-2024 cache load (will load combined cache later)\n")
-} else if (skip_exporter_processing) {
-  # Load cached data with abstracts already joined
-  nih_exporter_usa <- readRDS(exporter_cache)
-  cat("Loaded cached ExPORTER data:\n")
+if (skip_exporter_processing) {
+  cat("Using cached ExPORTER data (already loaded above):\n")
   cat("  Total rows:", nrow(nih_exporter_usa), "\n")
-  cat("  Grants with abstracts:", sum(!is.na(nih_exporter_usa$ABSTRACT_TEXT)), "\n")
+  # Check for abstract column (may be lowercase if from combined cache)
+  abstract_col <- if ("ABSTRACT_TEXT" %in% names(nih_exporter_usa)) "ABSTRACT_TEXT" else "abstract_text"
+  cat("  Grants with abstracts:", sum(!is.na(nih_exporter_usa[[abstract_col]])), "\n")
 } else {
   # Join abstracts to main ExPORTER data
   nih_exporter_usa <- nih_exporter_usa %>%
@@ -354,8 +367,7 @@ if (skip_all_processing) {
 NIH Reporter manual downloads (FY 2025) were split by agency groups to avoid the 15,000 record download limit. Files include agencies in the filename.
 
 ```{r read-manual-2025}
-# Skip 2025 processing if combined cache exists (already checked at start)
-skip_2025_processing <- skip_all_processing
+# Skip 2025 processing if combined cache was loaded (flag set in load-cache section)
 
 if (skip_2025_processing) {
   cat("Skipping 2025 manual data processing (will load combined cache)\n")
@@ -395,7 +407,7 @@ read_manual_2025 <- function(file_path) {
       FUNDING_MECHANISM = `Funding Mechanism`,
       FOA_NUMBER = `Opportunity Number`,
       PROGRAM_OFFICER_NAME = `Program Official Information`,
-      STUDY_SECTION_NAME = `Study Section`,  # 2025 manual download has name, not code
+      STUDY_SECTION_NAME = `Study Section`,  # 2025 manual download has name, not code of the section (ExPORTER data has both)
       # Activity
       ACTIVITY = `Activity`,
       # PI info
@@ -477,16 +489,14 @@ rm(nih_2025_list)
 } # end skip_2025_processing check
 ```
 
-## Combine NIH Exporter data from 2014-2024 with 2025 data - load nih_exporter_usa data from cache
+## Combine NIH Exporter data from 2014-2024 with 2025 data
 
-```{r combine-manual-with-exporter-load_nih_exporter_usa}
+```{r combine-manual-with-exporter}
 # Combine 2025 manual data with ExPORTER bulk data (2014-2024)
-# Or load from cache if available
+# Data was already loaded in load-cache section if cache exists
 
 if (skip_2025_processing) {
-  # Load combined cache
-  nih_exporter_usa <- readRDS(combined_cache)
-  cat("Loaded combined 2014-2025 cache:\n")
+  cat("Using combined 2014-2025 cache (already loaded above):\n")
   cat("  Total rows:", nrow(nih_exporter_usa), "\n")
   cat("\nGrants per fiscal year:\n")
   print(table(nih_exporter_usa$fiscal_year))
