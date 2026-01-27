@@ -2,6 +2,19 @@
 
 Analysis of the cuts of science grants in the US 2025
 
+## To Do: 
+
+- Add to the 02 and 03 scripts, at the end: save the analysis datasets in a dataformat compatible with python: Parquet is the best option:
+
+      In R:
+      arrow::write_parquet(df, "file.parquet")
+      In Python:
+
+      import pandas as pd
+      df = pd.read_parquet("file.parquet")
+
+- check the study_section and study_section name columns in nih_joined dataframe. Something got messed up. Sometimes the study_section column contains the study section name, the study_section_name column then says NA. But the code for study_section gets lost in this way. 
+
 ## Folder structure 
 
 After cloning the repository, add the following folders in the root directory:  
