@@ -6,13 +6,32 @@ Analysis of the cuts of science grants in the US 2025
 
 After cloning the repository, add the following folders in the root directory:  
 
+- code: contains all scripts, 01-03 for reading in and preparing nsf and nih data. 
 - data_raw: Json files, or .zip files downloaded in bulk
 - data: data in a format where they can be loaded into R/Python. Grant witness data is directly saved here. 
 - data_analysis: data with selected columns relevant for statistical analysis, or for sending emails to PIs of NSF projects.
-   - files are saved as .csv and .parquet. Parquet is a format readable for both Python and R without losing column formatting. To read into python use: 
+   - files are saved as .csv and .parquet. Parquet is a format readable for both Python and R without losing column formatting:
 
-import pandas as pd
-df = pd.read_parquet("file.parquet")
+      ```python
+      # Python
+      import pandas as pd
+      df = pd.read_parquet("file.parquet")
+      ```
+
+      ```r
+      # R
+      df <- arrow::read_parquet("file.parquet")
+      ```
+- add an additional folder for figures
+
+## R Dependencies
+
+Required R packages:
+
+- tidyverse
+- here
+- arrow (for parquet format)
+- lubridate (for NIH script date parsing)
 
 ## Scripts
 
@@ -42,8 +61,8 @@ To obtain the required raw data:
    - Source: https://www.grantwitness.us/
    - Download NSF, NIH and EPA data, add grant_witness_ at the start of each file and move into a data/ folder. 
       - `data/grant_witness_nsf_terminations.csv`
-      - `data/grant_witness_nih_terminations.csv` 
-      - `data/grant_witness_epa_terminations.csv`
+      - `data/grant_witness_nih_terminations.csv`
+      - `data/grant_witness_epa_terminations.csv` (terminated grants only; data on all EPA grants would need to be sourced separately - potential future work)
 
 3. **NIH All Grants (2014-2025)**
 
@@ -149,3 +168,16 @@ Only grants to US institutions (country code USA in NIH ExPORTER).
 
 - `data_analysis/nih_analysis.csv` - CSV format for broad compatibility
 - `data_analysis/nih_analysis.parquet` - Parquet format (Python and R compatible)
+
+### Intermediate Cache Files
+
+The NIH script creates cache files in `data/` to avoid reprocessing:
+
+- `data/nih_exporter_usa_2014_2024.rds` - ExPORTER bulk download data (2014-2024) with abstracts
+- `data/nih_exporter_usa_2014_2025.rds` - Combined 2014-2025 data (includes manual 2025 download)
+
+Delete these files to force reprocessing from raw data.
+
+### Known Limitations
+
+- **study_section column**: For FY 2025 data, only `study_section_name` (the full name) is available. The `study_section` code is NA for 2025 grants because the manual NIH Reporter download doesn't include study section codes. FY 2014-2024 data has both columns populated.
