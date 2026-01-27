@@ -4,7 +4,7 @@ format: html
 editor: source
 ---
 
-# Summary of what this script does
+# Summary of script and output datafile structure
 
 This script downloads, processes, and joins NIH grant data from multiple sources to create an analysis dataset of NIH grants with termination information.
 
@@ -33,7 +33,48 @@ The script caches intermediate results to avoid reprocessing:
 
 Delete cache files to force reprocessing.
 
+## Output Files
+
+- `data_analysis/nih_analysis.csv`: CSV format for broad compatibility
+- `data_analysis/nih_analysis.rds`: RDS format preserving R data types
+
+## Dataset Statistics
+
+| Metric         | Count   |
+|----------------|---------|
+| Total rows     | ~230,000 |
+| Total columns  | 38      |
+| Cut grants     | ~5,800   |
+| Non-cut grants | ~224,000 |
+| Fiscal years   | 2014-2025 |
+
+## Column Structure (38 columns)
+
+**From ExPORTER (21 columns)** - authoritative grant data:
+
+- IDs: application_id, core_project_num
+- Agency (IC = Institute or Center, organizational units of the NIH): administering_ic, administering_ic_name, study_section, study_section_name
+- PI: pi_names
+- Organization: org_name, org_state, congressional_district, org_dept, organization_type
+- Project: project_title, project_terms, public_health_relevance, nih_spending_categorization, project_abstract
+- Dates: fiscal_year, project_start, project_end
+- Budget: total_cost
+
+**From Grant Witness (17 columns)** - termination-specific:
+
+- Status: status, ever_frozen
+- Dates: targeted_start_date, targeted_end_date, frozen_date, unfrozen_date, termination_date
+- Reinstatement: reinstatement_indicator, reinstated_est_date
+- Spending: total_estimated_outlays, total_estimated_remaining, last_payment_date, cancellation_source
+- Analysis: flagged_words
+- Political: us_rep
+- URLs: usaspending_url, reporter_url
+
+**Note:** Cut grants have non-NA `status`. Use `!is.na(status)` to filter.
+
 # CODE
+
+## Packages and settings
 
 ```{r}
 # Packages
@@ -508,9 +549,9 @@ cat("  Rows:", nrow(nih_cut), "\n")
 cat("  Columns:", ncol(nih_cut), "\n")
 ```
 
-## Column Analysis and Recommendations
+## Column Analysis and Selection
 
-### ExPORTER Columns (48 columns) - Authoritative source for all grants
+### All ExPORTER Columns (48 columns) - Authoritative source for all grants
 
 **Identifiers:**
 - application_id, core_project_num (join key), full_project_num
@@ -519,7 +560,7 @@ cat("  Columns:", ncol(nih_cut), "\n")
 **Grant metadata:**
 - activity, application_type, funding_mechanism, cfda_code, foa_number
 
-**Agency/Admin:**
+**Agency/Admin (Institute or Center = IC):**
 - administering_ic, ic_name, funding_ics, program_officer_name
 - study_section, study_section_name
 
@@ -535,7 +576,7 @@ cat("  Columns:", ncol(nih_cut), "\n")
 
 **Budget:** total_cost, direct_cost_amt, indirect_cost_amt, total_cost_sub_project
 
-### Grant Witness Columns (56 columns) - Termination-specific data
+### All Grant Witness Columns (56 columns) - Termination-specific data
 
 **Overlapping with ExPORTER (use ExPORTER version):**
 - project_title, activity_code, org_name, org_state, org_city, terms
@@ -553,6 +594,8 @@ cat("  Columns:", ncol(nih_cut), "\n")
 - court_reported, court_restoration_url (legal info)
 - usaspending_url, taggs_url, reporter_url (reference links)
 
+## Select columns for analysis dataset
+
 ```{r column-recommendation}
 # Recommended columns from each dataset
 
@@ -560,21 +603,21 @@ cat("  Columns:", ncol(nih_cut), "\n")
 # Using column names that exist in both bulk download AND manual 2025 data
 exporter_cols <- c(
   # IDs
-  "application_id", "core_project_num", "full_project_num",
+  "application_id", "core_project_num", 
   # Agency
-  "administering_ic", "study_section", "funding_mechanism",
+  "administering_ic", "ic_name", "study_section", "study_section_name",
   # PI
-  "pi_ids", "pi_names",
+  "pi_names",
   # Organization
-  "org_name", "org_city", "org_state", "org_zipcode", "org_country",
-  "org_district", "org_dept", "ed_inst_type",
+  "org_name", "org_state", "org_district",
+  "org_dept", "ed_inst_type", #educational institution type
   # Project
   "project_title", "project_terms", "phr", "nih_spending_cats",
   "abstract_text",
   # Dates
   "fiscal_year", "project_start", "project_end",
   # Budget
-  "total_cost", "direct_cost_amt", "indirect_cost_amt"
+  "total_cost"
 )
 
 # From Grant Witness (termination-specific only)
@@ -594,7 +637,7 @@ grantwitness_cols <- c(
   # Analysis
   "flagged_words",
   # Political
-  "org_congdist", "us_rep",
+  "us_rep",
   # URLs
   "usaspending_url", "reporter_url"
 )
@@ -629,6 +672,7 @@ Add termination info from Grant Witness where available.
 ```{r create-joined-dataset}
 # Get most recent ExPORTER record per grant
 nih_exporter_latest <- nih_exporter_usa %>%
+  select(all_of(exporter_cols)) %>%
   group_by(core_project_num) %>%
   filter(fiscal_year == max(fiscal_year)) %>%
   slice(1) %>%  # In case of ties, take first
@@ -642,17 +686,32 @@ nih_cut_slim <- nih_cut %>%
 
 # Join: all grants from ExPORTER, add termination info where available
 nih_joined <- nih_exporter_latest %>%
-  select(all_of(exporter_cols)) %>%
   left_join(nih_cut_slim, by = c("core_project_num" = "core_award_number")) %>%
-  mutate(was_cut = !is.na(status))
+  mutate(status = str_remove(status, "^\\S+\\s+")) %>%  # remove emoji from status
+  arrange(desc(!is.na(status))) |> # put cut grants first
+  rename(
+    #make column names self-evident
+    organization_type = "ed_inst_type",
+    public_health_relevance = 'phr',
+    congressional_district = 'org_district',
+    nih_spending_categorization = 'nih_spending_cats',
+    project_abstract = 'abstract_text', 
+    administering_ic_name = 'ic_name' # in parallel to short code administering_ic
+  ) %>%
+  # Group date columns together for easy comparison
+  relocate(fiscal_year, project_start, project_end, targeted_start_date,
+           targeted_end_date, frozen_date, unfrozen_date, termination_date,
+           reinstatement_indicator, reinstated_est_date, last_payment_date,
+           .after = project_abstract) %>%
+  # Group budget columns together
+  relocate(total_cost, total_estimated_outlays, total_estimated_remaining,
+           .after = reinstated_est_date)
 
 cat("\nJoined dataset:\n")
 cat("  Total rows:", nrow(nih_joined), "\n")
 cat("  Total columns:", ncol(nih_joined), "\n")
-cat("  Cut grants:", sum(nih_joined$was_cut), "\n")
-cat("  Non-cut grants:", sum(!nih_joined$was_cut), "\n")
-
-glimpse(nih_joined)
+cat("  Cut grants:", sum(!is.na(nih_joined$status)), "\n")
+cat("  Non-cut grants:", sum(is.na(nih_joined$status)), "\n")
 ```
 
 ```{r check-lost-grants}
@@ -661,13 +720,14 @@ lost_cuts <- nih_cut %>%
   anti_join(nih_exporter_usa, by = c("core_award_number" = "core_project_num"))
 
 cat("Cut grants not found in ExPORTER:", nrow(lost_cuts), "\n")
-cat("These are likely FY 2025 grants not yet in ExPORTER bulk download.\n")
 
 # Show sample
 if (nrow(lost_cuts) > 0) {
   cat("\nSample lost grants:\n")
   print(head(lost_cuts %>% select(core_award_number, project_title, status), 10))
 }
+
+# Checked some of them: One lasted only one day in 2024, one got cut before it started, one was from Vietnam - probably ok to lose these 24 grants
 ```
 
 ```{r save-analysis-dataset}
@@ -679,45 +739,3 @@ cat("Saved to data_analysis/nih_analysis.csv and .rds\n")
 ```
 
 
-# Notes on the analysis file
-
-## Output Files
-
-- `data_analysis/nih_analysis.csv`: CSV format for broad compatibility
-- `data_analysis/nih_analysis.rds`: RDS format preserving R data types
-
-## Dataset Statistics
-
-| Metric         | Count   |
-|----------------|---------|
-| Total rows     | 230,456 |
-| Total columns  | 46      |
-| Cut grants     | 5,814   |
-| Non-cut grants | 224,642 |
-| Fiscal years   | 2014-2025 |
-
-## Column Structure (46 columns)
-
-**From ExPORTER (27 columns)** - authoritative grant data:
-
-- IDs: application_id, core_project_num, full_project_num
-- Agency: administering_ic, study_section, funding_mechanism
-- PI: pi_ids, pi_names
-- Organization: org_name, org_city, org_state, org_zipcode, org_country, org_district, org_dept, ed_inst_type
-- Project: project_title, project_terms, phr, nih_spending_cats, abstract_text
-- Dates: fiscal_year, project_start, project_end
-- Budget: total_cost, direct_cost_amt, indirect_cost_amt
-
-**From Grant Witness (18 columns)** - termination-specific:
-
-- Status: status, ever_frozen
-- Dates: frozen_date, unfrozen_date, termination_date, targeted_start_date, targeted_end_date
-- Reinstatement: reinstatement_indicator, reinstated_est_date
-- Spending: total_estimated_outlays, total_estimated_remaining, last_payment_date, cancellation_source
-- Analysis: flagged_words
-- Political: org_congdist, us_rep
-- URLs: usaspending_url, reporter_url
-
-**Derived (1 column)**:
-
-- was_cut: TRUE/FALSE flag indicating if grant was terminated/frozen
