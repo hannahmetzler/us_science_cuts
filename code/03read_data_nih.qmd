@@ -6,38 +6,32 @@ editor: source
 
 # Summary of what this script does
 
-## Data Downloaded
+This script downloads, processes, and joins NIH grant data from multiple sources to create an analysis dataset of NIH grants with termination information.
 
-  - NIH ExPORTER: FY 2014-2024, 828,249 US grants (1.9 GB)
-  - FY 2025-2026 not yet available on ExPORTER bulk download
-  - Files saved to data_raw/nih_exporter/
+## Data Sources
 
-  ## Join Test Results
+- **NIH ExPORTER** (bulk download): FY 2014-2024 grant records with abstracts
+- **NIH Reporter** (manual download): FY 2025 grant records (bulk download not yet available)
+- **Grant Witness**: Termination/freeze status for affected grants
 
-  - 97% match rate: 5,649 of 5,812 cut grants found in ExPORTER
-  - 163 unmatched: Likely FY 2025 grants not yet in ExPORTER
-  - Join key: core_project_num (ExPORTER) ↔ core_award_number (Grant Witness)
+## Processing Steps
 
-  ## Column Recommendations
+1. Download ExPORTER ZIP files for projects and abstracts (skipped if already downloaded)
+2. Extract and read CSVs, filter to US grants only
+3. Join abstracts to main dataset
+4. Read and standardize FY 2025 manual downloads
+5. Combine all years (2014-2025) into unified dataset
+6. Join with Grant Witness termination data
+7. Save analysis dataset
 
-  ### From ExPORTER (23 columns) - authoritative source:
-  - IDs: application_id, core_project_num, full_project_num
-  - Agency: administering_ic, ic_name
-  - PI: pi_ids, pi_names
-  - Org: org_name, org_city, org_state
-  - Project: project_title, project_terms, phr (Public Health Relevance), nih_spending_cats, abstract_text
-  - Dates: fiscal_year, project_start, project_end
-  - Budget: total_cost, direct_cost_amt, indirect_cost_amt
-  - Metadata: activity, funding_mechanism, study_section
+## Caching
 
-  ### From Grant Witness (19 columns) - termination-specific only:
-  - Status: status, ever_frozen
-  - Dates: frozen_date, unfrozen_date, termination_date, targeted_start/end_date
-  - Reinstatement: reinstatement_indicator, reinstated_est_date
-  - Spending: total_estimated_outlays, total_estimated_remaining, last_payment_date
-  - Analysis: flagged_words, cancellation_source
-  - Political: org_congdist, us_rep
-  - URLs: usaspending_url, reporter_url
+The script caches intermediate results to avoid reprocessing:
+
+- `data/nih_exporter_usa_2014_2024.rds`: ExPORTER data with abstracts
+- `data/nih_exporter_usa_2014_2025.rds`: Combined 2014-2025 data
+
+Delete cache files to force reprocessing.
 
 # CODE
 
@@ -687,31 +681,43 @@ cat("Saved to data_analysis/nih_analysis.csv and .rds\n")
 
 # Notes on the analysis file
 
-NIH Analysis Dataset Created
+## Output Files
 
-  File: data_analysis/nih_analysis.csv (493 MB)
+- `data_analysis/nih_analysis.csv`: CSV format for broad compatibility
+- `data_analysis/nih_analysis.rds`: RDS format preserving R data types
 
-  Dataset Statistics
+## Dataset Statistics
 
-  | Metric         | Count   |
-  |----------------|---------|
-  | Total rows     | 218,480 |
-  | Total columns  | 42      |
-  | Cut grants     | 5,675   |
-  | Non-cut grants | 212,805 |
-  | Match rate     | 97.2%   |
+| Metric         | Count   |
+|----------------|---------|
+| Total rows     | 230,456 |
+| Total columns  | 46      |
+| Cut grants     | 5,814   |
+| Non-cut grants | 224,642 |
+| Fiscal years   | 2014-2025 |
 
-  Lost Grants (163)
+## Column Structure (46 columns)
 
-  The 163 unmatched cut grants appear to be:
-  - FY 2025 grants not yet in ExPORTER bulk download
-  - Some have no project title (e.g., AY2AX prefixed awards)
-  - Mostly newer fellowship awards (F30, F31, K-series)
+**From ExPORTER (27 columns)** - authoritative grant data:
 
-  Column Structure (42 columns)
+- IDs: application_id, core_project_num, full_project_num
+- Agency: administering_ic, study_section, funding_mechanism
+- PI: pi_ids, pi_names
+- Organization: org_name, org_city, org_state, org_zipcode, org_country, org_district, org_dept, ed_inst_type
+- Project: project_title, project_terms, phr, nih_spending_cats, abstract_text
+- Dates: fiscal_year, project_start, project_end
+- Budget: total_cost, direct_cost_amt, indirect_cost_amt
 
-  - 23 from ExPORTER: Grant metadata, PI info, org info, dates, budget
-  - 18 from Grant Witness: Termination status, dates, spending, political info, URLs
-  - 1 derived: was_cut (TRUE/FALSE flag)
+**From Grant Witness (18 columns)** - termination-specific:
 
-  The dataset follows the same structure as your NSF analysis - ExPORTER as authoritative source for all grants, with termination-specific info from Grant Witness added where applicable.
+- Status: status, ever_frozen
+- Dates: frozen_date, unfrozen_date, termination_date, targeted_start_date, targeted_end_date
+- Reinstatement: reinstatement_indicator, reinstated_est_date
+- Spending: total_estimated_outlays, total_estimated_remaining, last_payment_date, cancellation_source
+- Analysis: flagged_words
+- Political: org_congdist, us_rep
+- URLs: usaspending_url, reporter_url
+
+**Derived (1 column)**:
+
+- was_cut: TRUE/FALSE flag indicating if grant was terminated/frozen
