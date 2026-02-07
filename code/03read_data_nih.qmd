@@ -2,6 +2,8 @@
 title: "Read, clean and join NIH data"
 format: html
 editor: source
+  markdown: 
+    wrap: 72
 ---
 
 # Summary of script and output datafile structure
@@ -10,65 +12,65 @@ This script downloads, processes, and joins NIH grant data from multiple sources
 
 ## Data Sources
 
-- **NIH ExPORTER** (bulk download): FY 2014-2024 grant records with abstracts
-- **NIH Reporter** (manual download): FY 2025 grant records (bulk download not yet available)
-- **Grant Witness**: Termination/freeze status for affected grants
+-   **NIH ExPORTER** (bulk download): FY 2014-2024 grant records with abstracts
+-   **NIH Reporter** (manual download): FY 2025 grant records (bulk download not yet available)
+-   **Grant Witness**: Termination/freeze status for affected grants
 
 ## Processing Steps
 
-1. Download ExPORTER ZIP files for projects and abstracts (skipped if already downloaded)
-2. Extract and read CSVs, filter to US grants only
-3. Join abstracts to main dataset
-4. Read and standardize FY 2025 manual downloads
-5. Combine all years (2014-2025) into unified dataset
-6. Join with Grant Witness termination data
-7. Save analysis dataset
+1.  Download ExPORTER ZIP files for projects and abstracts (skipped if already downloaded)
+2.  Extract and read CSVs, filter to US grants only
+3.  Join abstracts to main dataset
+4.  Read and standardize FY 2025 manual downloads
+5.  Combine all years (2014-2025) into unified dataset
+6.  Join with Grant Witness termination data
+7.  Save analysis dataset
 
 ## Caching
 
 The script caches intermediate results to avoid reprocessing:
 
-- `data/nih_exporter_usa_2014_2024.rds`: ExPORTER data with abstracts
-- `data/nih_exporter_usa_2014_2025.rds`: Combined 2014-2025 data
+-   `data/nih_exporter_usa_2014_2024.rds`: ExPORTER data with abstracts
+-   `data/nih_exporter_usa_2014_2025.rds`: Combined 2014-2025 data
 
 Delete cache files to force reprocessing.
 
 ## Output Files
 
-- `data_analysis/nih_analysis.csv`: CSV format for broad compatibility
-- `data_analysis/nih_analysis.parquet`: Parquet format for Python compatibility (and faster R loading)
+-   `data_analysis/nih_analysis.csv`: CSV format for broad compatibility
+-   `data_analysis/nih_analysis.parquet`: Parquet format for Python compatibility (and faster R loading)
 
 ## Dataset Statistics
 
-| Metric         | Count   |
-|----------------|---------|
-| Total rows     | ~230,000 |
-| Total columns  | 38      |
-| Cut grants     | ~5,800   |
-| Non-cut grants | ~224,000 |
+| Metric         | Count     |
+|----------------|-----------|
+| Total rows     | \~230,000 |
+| Total columns  | 38        |
+| Cut grants     | \~5,800   |
+| Non-cut grants | \~224,000 |
 | Fiscal years   | 2014-2025 |
 
 ## Column Structure (38 columns)
 
 **From ExPORTER (21 columns)** - authoritative grant data:
 
-- IDs: application_id, core_project_num
-- Agency (IC = Institute or Center, organizational units of the NIH): administering_ic, administering_ic_name, study_section, study_section_name
-- PI: pi_names
-- Organization: org_name, org_state, congressional_district, org_dept, organization_type
-- Project: project_title, project_terms, public_health_relevance, nih_spending_categorization, project_abstract
-- Dates: fiscal_year, project_start, project_end
-- Budget: total_cost
+-   IDs: application_id, core_project_num
+-   Agency (IC = Institute or Center, organizational units of the NIH): administering_ic, administering_ic_name, study_section, study_section_name
+-   PI: pi_names
+-   Organization: org_name, org_state, congressional_district, org_dept, organization_type
+-   Project: project_title, project_terms, public_health_relevance, nih_spending_categorization, project_abstract
+-   Dates: fiscal_year, project_start, project_end
+-   Budget: total_cost
 
 **From Grant Witness (17 columns)** - termination-specific:
 
-- Status: status, ever_frozen
-- Dates: targeted_start_date, targeted_end_date, frozen_date, unfrozen_date, termination_date
-- Reinstatement: reinstatement_indicator, reinstated_est_date
-- Spending: total_estimated_outlays, total_estimated_remaining, last_payment_date, cancellation_source
-- Analysis: flagged_words
-- Political: us_rep
-- URLs: usaspending_url, reporter_url
+-   Status: status, ever_frozen
+-   Dates: targeted_start_date, targeted_end_date, frozen_date, unfrozen_date, termination_date
+-   Reinstatement: reinstatement_indicator, reinstated_est_date
+-   Spending: total_estimated_outlays, total_estimated_remaining, last_payment_date, cancellation_source
+-   Analysis: flagged_words
+-   Political: us_rep
+-   URLs: usaspending_url, reporter_url
 
 **Note:** Cut grants have non-NA `status`. Use `!is.na(status)` to filter.
 
@@ -98,7 +100,7 @@ if (!dir.exists(data_dir)) {
 
 ## Load cached data
 
-Load the most complete cached dataset available. This makes `nih_exporter_usa` available for inspection even if you don't want to reprocess everything. For later runs of this script, once data has been downloaded and processed a first time. 
+Load the most complete cached dataset available. This makes `nih_exporter_usa` available for inspection even if you don't want to reprocess everything. For later runs of this script, once data has been downloaded and processed a first time.
 
 ```{r load-cache}
 # Define cache file paths
@@ -131,9 +133,8 @@ cat("  skip_2025_processing:", skip_2025_processing, "\n")
 
 ## Download NIH ExPORTER data
 
-- ExPORTER provides bulk downloads of NIH grant data by fiscal year.
- -Source: https://reporter.nih.gov/exporter/
-- Abstract files (download-abstracts chunk) - from https://reporter.nih.gov/exporter/abstracts/download/<fy> for 2014-2024
+-   ExPORTER provides bulk downloads of NIH grant data by fiscal year. -Source: https://reporter.nih.gov/exporter/
+-   Abstract files (download-abstracts chunk) - from https://reporter.nih.gov/exporter/abstracts/download/<fy> for 2014-2024
 
 ```{r download-exporter}
 # Download ExPORTER project files for fiscal years 2014-2026
@@ -194,7 +195,6 @@ for (fy in fiscal_years) {
 # List abstract files
 list.files(data_dir, pattern = "PRJABS.*\\.zip$")
 ```
-
 
 ## Extract, read and join bulk download EXPORTER datasets
 
@@ -564,20 +564,13 @@ cat("  Columns:", ncol(nih_cut), "\n")
 
 ### All ExPORTER Columns (48 columns) - Authoritative source for all grants
 
-**Identifiers:**
-- application_id, core_project_num (join key), full_project_num
-- serial_number, subproject_id, suffix, support_year
+**Identifiers:** - application_id, core_project_num (join key), full_project_num - serial_number, subproject_id, suffix, support_year
 
-**Grant metadata:**
-- activity, application_type, funding_mechanism, cfda_code, foa_number
+**Grant metadata:** - activity, application_type, funding_mechanism, cfda_code, foa_number
 
-**Agency/Admin (Institute or Center = IC):**
-- administering_ic, ic_name, funding_ics, program_officer_name
-- study_section, study_section_name
+**Agency/Admin (Institute or Center = IC):** - administering_ic, ic_name, funding_ics, program_officer_name - study_section, study_section_name
 
-**Organization:**
-- org_name, org_city, org_state, org_country, org_dept, org_zipcode
-- org_district, org_duns, org_fips, org_ipf_code, ed_inst_type
+**Organization:** - org_name, org_city, org_state, org_country, org_dept, org_zipcode - org_district, org_duns, org_fips, org_ipf_code, ed_inst_type
 
 **PI:** pi_ids, pi_names
 
@@ -589,21 +582,9 @@ cat("  Columns:", ncol(nih_cut), "\n")
 
 ### All Grant Witness Columns (56 columns) - Termination-specific data
 
-**Overlapping with ExPORTER (use ExPORTER version):**
-- project_title, activity_code, org_name, org_state, org_city, terms
-- phr_text, study_section, foa, total_award
+**Overlapping with ExPORTER (use ExPORTER version):** - project_title, activity_code, org_name, org_state, org_city, terms - phr_text, study_section, foa, total_award
 
-**Unique termination-specific columns to KEEP:**
-- status, ever_frozen, frozen_date, unfrozen_date
-- termination_date, targeted_start_date, targeted_end_date
-- reinstatement_indicator, reinstated_est_date, reinstatement_case
-- last_payment_date, cancellation_source
-- total_estimated_outlays, total_estimated_remaining
-- file_c_outlays (detailed outlay history)
-- flagged_words (analysis of concerning terms)
-- us_rep, us_rep_phone, org_congdist (political data)
-- court_reported, court_restoration_url (legal info)
-- usaspending_url, taggs_url, reporter_url (reference links)
+**Unique termination-specific columns to KEEP:** - status, ever_frozen, frozen_date, unfrozen_date - termination_date, targeted_start_date, targeted_end_date - reinstatement_indicator, reinstated_est_date, reinstatement_case - last_payment_date, cancellation_source - total_estimated_outlays, total_estimated_remaining - file_c_outlays (detailed outlay history) - flagged_words (analysis of concerning terms) - us_rep, us_rep_phone, org_congdist (political data) - court_reported, court_restoration_url (legal info) - usaspending_url, taggs_url, reporter_url (reference links)
 
 ## Select columns for analysis dataset
 
@@ -677,19 +658,34 @@ cat("  Unmatched (likely FY 2025):", nrow(unmatched), "\n")
 
 ## Create Joined Analysis Dataset
 
-Strategy: ExPORTER is authoritative. Keep most recent FY record per grant.
-Add termination info from Grant Witness where available.
+Strategy: ExPORTER is authoritative. Keep most recent FY record per grant. Add termination info from Grant Witness where available.
 
 ```{r create-joined-dataset}
-# Get most recent ExPORTER record per grant
+#### ----- OLD CODE ----- ####
+#nih_exporter_latest <- nih_exporter_usa %>%
+#  select(all_of(exporter_cols)) %>%
+#  group_by(core_project_num) %>%
+#  filter(fiscal_year == max(fiscal_year)) %>%
+#  slice(1) %>%  # In case of ties, take first
+#  ungroup()
+
+#cat("ExPORTER deduplicated:", nrow(nih_exporter_latest), "unique grants\n")
+#### ------------------ ####
+
+#### ----- NEW CODE ----- ####
+# Get most recent ExPORTER record per grant AND sum the costs over all fiscal years
 nih_exporter_latest <- nih_exporter_usa %>%
   select(all_of(exporter_cols)) %>%
   group_by(core_project_num) %>%
+  mutate(total_project_cost_sum = sum(total_cost, na.rm = TRUE)) %>% 
   filter(fiscal_year == max(fiscal_year)) %>%
-  slice(1) %>%  # In case of ties, take first
-  ungroup()
+  slice(1) %>% 
+  ungroup() %>%
+  mutate(total_cost = total_project_cost_sum) %>%
+  select(-total_project_cost_sum)
 
-cat("ExPORTER deduplicated:", nrow(nih_exporter_latest), "unique grants\n")
+cat("ExPORTER deduplicated and costs summed:", nrow(nih_exporter_latest), "unique grants\n")
+#### ------------------ ####
 
 # Select columns from Grant Witness (termination-specific only)
 nih_cut_slim <- nih_cut %>%
@@ -748,5 +744,3 @@ arrow::write_parquet(nih_joined, here('data_analysis/nih_analysis.parquet'))
 cat("NIH analysis dataset:", nrow(nih_joined), "grants,", ncol(nih_joined), "columns\n")
 cat("Saved to data_analysis/nih_analysis.csv and .parquet\n")
 ```
-
-
